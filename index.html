@@ -98,6 +98,11 @@ textarea:focus,input:focus{outline:0;border-color:var(--main)}
 .mini-btn.del{border-color:#9aa5b1;color:#5b6570}
 .mini-btn.save{background:var(--main,#1F4E79);color:#fff}
 .redit{margin-top:6px;white-space:normal}
+.notice{background:#fff;border-radius:16px;padding:10px 12px;margin-bottom:8px;box-shadow:0 2px 8px rgba(30,60,100,.07);border-left:6px solid var(--main,#1F4E79)}
+.notice.fresh{border-left-color:var(--acc2,#FFC000)}
+.ntext{white-space:pre-wrap;font-size:14px;line-height:1.6;margin-top:4px}
+details.oldn,details.who{margin:4px 0 8px}details.oldn summary,details.who summary{font-size:12px;color:var(--main,#1F4E79);cursor:pointer;padding:4px 0}
+select{width:100%;border:2px solid var(--line2,#d0d7e1);border-radius:14px;padding:10px;font:inherit;font-size:16px;background:#fff}
 </style>
 </head>
 <body>
@@ -179,13 +184,13 @@ async function demoApi(action, b) {
 
 /* ===== 状態 ===== */
 const S = {
-  key: store.get('key', ''), name: store.get('name', ''), role: store.get('role', 'student'), needSet: store.get('needSet', false), me: store.get('me', ''), editing: null,
+  key: store.get('key', ''), name: store.get('name', ''), role: store.get('role', 'student'), needSet: store.get('needSet', false), me: store.get('me', ''), editing: null, editingN: null, notices: store.get('notices', []), seenN: store.get('seenN', []), reportedN: store.get('reportedN', []),
   cd: store.get('cd', { members: [], entries: [], replies: [] }), member: null, showAll: false, repDraft: {},
   entries: store.get('entries', []), replies: store.get('replies', []),
   outbox: store.get('outbox', []), seen: store.get('seen', []),
   tab: 'today', draft: store.get('draft', null), justSeen: []
 };
-const save = () => { store.set('entries', S.entries); store.set('replies', S.replies); store.set('outbox', S.outbox); store.set('seen', S.seen); };
+const save = () => { store.set('notices', S.notices); store.set('seenN', S.seenN); store.set('reportedN', S.reportedN); store.set('entries', S.entries); store.set('replies', S.replies); store.set('outbox', S.outbox); store.set('seen', S.seen); };
 
 /* ===== 道具 ===== */
 const $ = s => document.querySelector(s);
@@ -194,10 +199,18 @@ const pad = n => String(n).padStart(2, '0');
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 const WD = ['日', '月', '火', '水', '木', '金', '土'];
 const jdate = s => { const [y, m, d] = s.split('-').map(Number); const w = WD[new Date(y, m - 1, d).getDay()]; return `${m}月${d}日（${w}）`; };
+const localDate = iso => { const d = new Date(iso); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 function toast(msg) { document.querySelectorAll('.toast').forEach(x => x.remove()); const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 2600); }
 const allEntries = () => { const ids = new Set(S.entries.map(e => e.id)); return [...S.entries, ...S.outbox.filter(e => !ids.has(e.id)).map(e => ({ ...e, _wait: true }))].sort((a, b) => b.date.localeCompare(a.date) || (Date.parse(b.at) - Date.parse(a.at))); };
 const repliesFor = id => S.replies.filter(r => r.entryId === id).sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+const nkey = n => n.edited ? `${n.id}@${n.edited}` : n.id;
+const unseenN = () => S.notices.filter(n => !S.seenN.includes(nkey(n)));
+async function reportReads() {
+  const ids = S.notices.map(n => n.id).filter(id => !S.reportedN.includes(id));
+  if (!ids.length) return;
+  try { await api('readNotices', { key: S.key, ids }); S.reportedN = [...new Set([...S.reportedN, ...ids])]; save(); } catch (e) {}
+}
 const rkey = r => r.edited ? `${r.id}@${r.edited}` : r.id;
 const unseen = () => S.replies.filter(r => !S.seen.includes(rkey(r)));
 const lastNext = () => { const e = allEntries()[0]; return e ? e.next || '' : ''; };
@@ -212,16 +225,16 @@ async function flush() {
 }
 function forgetIfBadKey(e) {
   if (e && e.server && /先に自分の合言葉/.test(e.message || '')) { S.needSet = true; store.set('needSet', true); render(); return; }
-  if (e && e.server && /合言葉/.test(e.message || '')) { ['key', 'name', 'role', 'needSet', 'me', 'entries', 'replies', 'outbox', 'seen', 'draft', 'cd'].forEach(k => store.del(k)); location.reload(); }
+  if (e && e.server && /合言葉/.test(e.message || '')) { ['key', 'name', 'role', 'needSet', 'me', 'entries', 'replies', 'outbox', 'seen', 'draft', 'cd', 'notices', 'seenN', 'reportedN'].forEach(k => store.del(k)); location.reload(); }
 }
 async function refresh() {
   if (S.role === 'coach') {
-    try { const j = await api('coachList', { key: S.key }); S.cd = { members: j.members, entries: j.entries, replies: j.replies }; if (j.me) { S.me = j.me; store.set('me', S.me); } store.set('cd', S.cd); return true; } catch (e) { forgetIfBadKey(e); return false; }
+    try { const j = await api('coachList', { key: S.key }); S.cd = { members: j.members, entries: j.entries, replies: j.replies, notices: j.notices || [], reads: j.reads || [] }; if (j.me) { S.me = j.me; store.set('me', S.me); } store.set('cd', S.cd); return true; } catch (e) { forgetIfBadKey(e); return false; }
   }
   try {
     await flush();
     const j = await api('list', { key: S.key });
-    S.entries = j.entries; S.replies = j.replies; if (j.name) { S.name = j.name; store.set('name', j.name); }
+    S.entries = j.entries; S.replies = j.replies; S.notices = j.notices || []; if (j.name) { S.name = j.name; store.set('name', j.name); }
     save(); return true;
   } catch (e) { forgetIfBadKey(e); return false; }
 }
@@ -232,8 +245,8 @@ function shell(sub, body) {
   $('#app').innerHTML = (DEMO ? '<div class="demo">見本モード（本物には送られません）</div>' : '') +
     `<header><div class="t en">PRACTICE NOTE</div><div class="s">${esc(sub)}</div></header>` +
     (S.key && !S.needSet ? (S.role === 'coach'
-      ? `<nav>${[['new', '新しい記録'], ['members', '部員ごと']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'new' && unreplied().length ? `<span class="badge">${unreplied().length}</span>` : ''}</button>`).join('')}</nav>`
-      : `<nav>${[['today', '今日の記録'], ['history', 'これまで'], ['graph', 'グラフ']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'history' && n ? `<span class="badge">返事 ${n}</span>` : ''}</button>`).join('')}</nav>`) : '') +
+      ? `<nav>${[['new', '新しい記録'], ['members', '部員ごと'], ['notice', 'お知らせ']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'new' && unreplied().length ? `<span class="badge">${unreplied().length}</span>` : ''}</button>`).join('')}</nav>`
+      : `<nav>${[['today', '今日の記録'], ['history', 'これまで'], ['graph', 'グラフ']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'history' && n ? `<span class="badge">返事 ${n}</span>` : ''}${k === 'today' && S.tab !== 'today' && unseenN().length ? `<span class="badge">お知らせ</span>` : ''}</button>`).join('')}</nav>`) : '') +
     `<main>${body}</main>`;
   document.querySelectorAll('nav button').forEach(b => b.onclick = () => go(b.dataset.tab));
 }
@@ -303,7 +316,13 @@ function renderToday() {
   <div class="q">今日よかったプレーは？</div><textarea id="good">${esc(d.good)}</textarea>
   <div class="q">うまくいかなかったのは？なぜ？</div><textarea id="bad">${esc(d.bad)}</textarea>
   <div class="q">誰かに言われたこと・気づいたことは？</div><textarea id="heard">${esc(d.heard)}</textarea>`;
+  const nNew = unseenN(); const nOld = [...S.notices].filter(x => !nNew.includes(x)).sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  const nCard = (x, fresh) => `<div class="notice ${fresh ? 'fresh' : ''}"><div class="date"><span>${esc(x.by)}から　<span class="mini">${x.to === 'all' ? '全員へ' : 'あなたへ'}・${jdate(localDate(x.at))}${x.edited ? '（直しました）' : ''}</span></span>${fresh ? '<span class="tag">NEW</span>' : ''}</div><div class="ntext">${esc(x.text)}</div></div>`;
+  const noticeBlock = S.notices.length ? `<div class="h" style="margin-top:4px"><span class="en">FROM COACH</span><span class="ja">先生から</span></div>
+    ${nNew.sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).map(x => nCard(x, true)).join('')}
+    ${nOld.length ? `<details class="oldn"><summary>前のお知らせ（${nOld.length}件）</summary>${nOld.map(x => nCard(x, false)).join('')}</details>` : ''}` : '';
   shell(`${jdate(today())}　${S.name}`, `
+  ${noticeBlock}
   ${S.outbox.length ? `<div class="pending">送信待ち ${S.outbox.length}件。ネットにつながったら自動で送ります</div>` : ''}
   ${done ? `<div class="mini">今日はもう${done}回提出しています。もう一度出すと、もう1件追加されます</div>` : ''}
   <div class="seg"><button data-type="practice" class="${M ? '' : 'on'}">練習</button><button data-type="match" class="${M ? 'on' : ''}">試合</button></div>
@@ -324,6 +343,8 @@ function renderToday() {
   document.querySelectorAll('.seg button').forEach(b => b.onclick = () => { saveDraft(); d.type = b.dataset.type; store.set('draft', d); renderToday(); });
   document.querySelectorAll('textarea,input').forEach(el => el.addEventListener('input', () => { el.classList.remove('miss'); saveDraft(); }));
   $('#submit').onclick = submit;
+  if (nNew.length) { S.seenN = [...new Set([...S.seenN, ...nNew.map(nkey)])]; save(); }
+  reportReads();
 }
 async function submit() {
   saveDraft(); const d = S.draft; const miss = []; const M = d.type === 'match';
@@ -394,7 +415,7 @@ function renderHistory() {
 }
 function bindFoot() {
   const r = $('#reload'); if (r) r.onclick = async () => { toast((await refresh()) ? '最新にしました' : 'ネットにつながっていません'); render(); };
-  const l = $('#logout'); if (l) l.onclick = () => { if (!confirm('この端末から合言葉と記録の控えを消します。もう一度使うときは合言葉を入れ直します。よいですか？')) return; ['key', 'name', 'role', 'needSet', 'me', 'entries', 'replies', 'outbox', 'seen', 'draft', 'cd'].forEach(k => store.del(k)); location.reload(); };
+  const l = $('#logout'); if (l) l.onclick = () => { if (!confirm('この端末から合言葉と記録の控えを消します。もう一度使うときは合言葉を入れ直します。よいですか？')) return; ['key', 'name', 'role', 'needSet', 'me', 'entries', 'replies', 'outbox', 'seen', 'draft', 'cd', 'notices', 'seenN', 'reportedN'].forEach(k => store.del(k)); location.reload(); };
 }
 
 /* ===== 顧問用 ===== */
@@ -427,7 +448,54 @@ function bindReplies() {
     catch (e) { b.disabled = false; toast(e.server ? '送れませんでした：' + e.message : 'ネットにつながっていません。つながってからもう一度'); }
   });
 }
+function renderNotices() {
+  const mem = S.cd.members; const all = [...(S.cd.notices || [])].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  const reads = S.cd.reads || [];
+  const card = x => {
+    const targets = x.to === 'all' ? mem : mem.filter(m => m.id === x.to);
+    const rd = targets.filter(m => reads.some(r => r.noticeId === x.id && r.uid === m.id));
+    const mine = x.byId === S.me;
+    const body = S.editingN === x.id ? `<textarea class="redit" id="ned_${x.id}">${esc(x.text)}</textarea><div class="rbtns"><button class="mini-btn save nsave" data-nid="${x.id}">保存</button><button class="mini-btn cancel ncancel">やめる</button></div>`
+      : `<div class="ntext">${esc(x.text)}</div>${mine ? `<div class="rbtns"><button class="mini-btn nedit" data-nid="${x.id}">直す</button><button class="mini-btn del ndel" data-nid="${x.id}">消す</button></div>` : ''}`;
+    return `<div class="card"><div class="date"><span>${x.to === 'all' ? '全員へ' : esc((mem.find(m => m.id === x.to) || {}).name || '？') + 'へ'}　<span class="mini">${esc(x.by)}・${jdate(localDate(x.at))}${x.edited ? '（直しました）' : ''}</span></span><span class="tag ${rd.length === targets.length ? 'wait' : ''}">既読 ${rd.length}／${targets.length}</span></div>
+      ${body}
+      <details class="who"><summary>だれが読んだか</summary><div class="mini">読んだ：${rd.map(m => esc(m.name)).join('・') || 'まだいない'}</div><div class="mini">まだ：${targets.filter(m => !rd.includes(m)).map(m => esc(m.name)).join('・') || 'いない'}</div></details></div>`;
+  };
+  shell('顧問用　' + S.name, `<div class="card"><div class="h" style="margin-top:0"><span class="en">NOTICE</span><span class="ja">お知らせを送る</span></div>
+    <div class="q">宛先</div><select id="nto"><option value="all">全員</option>${mem.map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select>
+    <div class="q">お知らせ</div><textarea id="ntext">${esc(S.nDraft || '')}</textarea>
+    <button class="btn" id="nsend" style="margin-top:10px;padding:12px">送る</button>
+    <div class="mini" style="margin-top:6px">部員が次にアプリを開くと、「今日の記録」の一番上に出ます</div></div>
+    <div class="h"><span class="en">SENT</span><span class="ja">送ったお知らせ</span></div>
+    <div class="list">${all.map(card).join('') || '<p class="mini center">まだ送っていません</p>'}</div>
+    <div class="foot"><button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);
+  $('#ntext').addEventListener('input', e => { S.nDraft = e.target.value; });
+  $('#nsend').onclick = async () => {
+    const text = $('#ntext').value.trim(), to = $('#nto').value; if (!text) { toast('お知らせを書いてから送ってください'); return; }
+    const who = to === 'all' ? '全員' : (mem.find(m => m.id === to) || {}).name;
+    if (!confirm(`${who}に送ります。よいですか？`)) return;
+    $('#nsend').disabled = true;
+    try { const j = await api('notice', { key: S.key, to, text }); S.cd.notices = [...(S.cd.notices || []), j.notice]; store.set('cd', S.cd); S.nDraft = ''; toast('送りました'); render(); }
+    catch (e) { $('#nsend').disabled = false; toast(e.server ? e.message : 'ネットにつながっていません。つながってからもう一度'); }
+  };
+  document.querySelectorAll('.nedit').forEach(b => b.onclick = () => { S.editingN = b.dataset.nid; render(); });
+  document.querySelectorAll('.ncancel').forEach(b => b.onclick = () => { S.editingN = null; render(); });
+  document.querySelectorAll('.nsave').forEach(b => b.onclick = async () => {
+    const id = b.dataset.nid, text = $('#ned_' + id).value.trim(); if (!text) { toast('空では保存できません。消すときは「消す」を'); return; }
+    b.disabled = true;
+    try { const j = await api('editNotice', { key: S.key, noticeId: id, text }); S.cd.notices = S.cd.notices.map(x => x.id === id ? j.notice : x); store.set('cd', S.cd); S.editingN = null; toast('直しました'); render(); }
+    catch (e) { b.disabled = false; toast(e.server ? e.message : 'ネットにつながっていません'); }
+  });
+  document.querySelectorAll('.ndel').forEach(b => b.onclick = async () => {
+    if (!confirm('このお知らせを消します。部員の画面からも消えます。よいですか？')) return;
+    const id = b.dataset.nid; b.disabled = true;
+    try { await api('deleteNotice', { key: S.key, noticeId: id }); S.cd.notices = S.cd.notices.filter(x => x.id !== id); store.set('cd', S.cd); toast('消しました'); render(); }
+    catch (e) { b.disabled = false; toast(e.server ? e.message : 'ネットにつながっていません'); }
+  });
+  bindFoot();
+}
 function renderCoach() {
+  if (S.tab === 'notice') return renderNotices();
   if (S.tab === 'members') return S.member ? renderMember() : renderMembers();
   const list = cSort(S.showAll ? S.cd.entries : unreplied());
   const body = list.length ? list.map(e => entryHTML(e, { coach: true, open: true, who: memberName(e.uid), replies: cRepliesFor(e.id), tag: cRepliesFor(e.id).length ? '' : '<span class="tag">未返事</span>' })).join('')
@@ -446,7 +514,7 @@ function renderMembers() {
       <div class="mini">記録 ${es.length}件　${last ? `最後 ${jdate(last.date)}` : 'まだ記録なし'}</div>
       ${last ? `<div class="nums">意識できた <b>${last.n1}</b>　体 <b>${last.n2}</b>　気持ち <b>${last.n3}</b>${last.type === 'match' ? `　出来 <b>${last.n4}</b>` : ''}</div>` : ''}</div>`;
   }).join('');
-  shell('顧問用　' + S.name, `<div class="list">${rows || '<p class="mini center">部員がまだいません</p>'}</div><div class="foot"><button class="link" id="reload">最新にする</button></div>`);
+  shell('顧問用　' + S.name, `<div class="list">${rows || '<p class="mini center">部員がまだいません</p>'}</div><div class="foot"><button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);
   document.querySelectorAll('.member').forEach(c => c.onclick = () => { S.member = c.dataset.uid; render(); window.scrollTo(0, 0); });
   bindFoot();
 }
@@ -489,7 +557,7 @@ window.addEventListener('online', async () => { await refresh(); render(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveDraft(); });
 render();
 if (S.key && S.role === 'coach') refresh().then(ok => { if (ok) render(); });
-else if (S.key) refresh().then(ok => { if (ok && S.tab !== 'today') render(); else if (ok) { const n = unseen().length; if (n) { toast(`先生からの返事が${n}件あります`); render(); } } });
+else if (S.key) refresh().then(ok => { if (!ok) return; const n = unseen().length, m = unseenN().length; if (S.tab !== 'today' || m) render(); if (n) toast(`先生からの返事が${n}件あります`); });
 </script>
 <script>
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {

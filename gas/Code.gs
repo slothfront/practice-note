@@ -10,9 +10,11 @@ const COLS = {
   members: ['合言葉', 'id', '名前', '役割', '初回'],
   entries: ['id', 'uid', 'date', 'type', 'focus', 'opp', 'n1', 'n2', 'n3', 'n4', 'r1', 'r2', 'r3', 'r4',
             'good', 'bad', 'heard', 'mgood', 'mbad', 'tgood', 'tbad', 'mprac', 'tocoach', 'next', 'at', 'received'],
-  replies: ['id', 'entryId', 'text', 'at', 'by', 'byId', 'edited']
+  replies: ['id', 'entryId', 'text', 'at', 'by', 'byId', 'edited'],
+  notices: ['id', 'to', 'text', 'at', 'by', 'byId', 'edited'],
+  reads: ['noticeId', 'uid', 'at']
 };
-const SHEET = { members: '部員', entries: '記録', replies: '返事' };
+const SHEET = { members: '部員', entries: '記録', replies: '返事', notices: 'お知らせ', reads: '既読' };
 
 function setupPracticeNote() {
   const props = PropertiesService.getScriptProperties();
@@ -92,13 +94,16 @@ function handle_(b) {
     const entries = readAll_(book.getSheetByName(SHEET.entries)).filter(r => r.uid === user.id).map(clean_);
     const ids = new Set(entries.map(x => x.id));
     const replies = readAll_(book.getSheetByName(SHEET.replies)).filter(r => ids.has(r.entryId)).map(cleanR_);
-    return { ok: true, name: user.name, entries, replies };
+    const notices = readAll_(book.getSheetByName(SHEET.notices)).filter(n => n.to === 'all' || n.to === user.id).map(cleanN_);
+    return { ok: true, name: user.name, entries, replies, notices };
   }
   if (a === 'coachList' && coach) {
     const members = readAll_(book.getSheetByName(SHEET.members)).filter(r => r['役割'] !== 'coach' && r['名前']).map(r => ({ id: String(r.id), name: String(r['名前']) }));
     const entries = readAll_(book.getSheetByName(SHEET.entries)).map(r => Object.assign(clean_(r), { uid: String(r.uid) }));
     const replies = readAll_(book.getSheetByName(SHEET.replies)).map(cleanR_);
-    return { ok: true, name: user.name, me: user.id, members, entries, replies };
+    const notices = readAll_(book.getSheetByName(SHEET.notices)).map(cleanN_);
+    const reads = readAll_(book.getSheetByName(SHEET.reads)).map(r => ({ noticeId: String(r.noticeId), uid: String(r.uid) }));
+    return { ok: true, name: user.name, me: user.id, members, entries, replies, notices, reads };
   }
   if (a === 'reply' && coach) {
     const text = String(b.text || '').trim();
@@ -129,13 +134,51 @@ function handle_(b) {
       return { ok: false, error: '返事が見つかりません' };
     });
   }
+  if (a === 'readNotices' && !coach) {
+    const ids = (b.ids || []).map(String).slice(0, 200);
+    return withLock_(() => {
+      const sh = book.getSheetByName(SHEET.reads); const have = new Set(readAll_(sh).filter(r => String(r.uid) === user.id).map(r => String(r.noticeId)));
+      const mine = new Set(readAll_(book.getSheetByName(SHEET.notices)).filter(n => n.to === 'all' || n.to === user.id).map(n => String(n.id)));
+      const now = new Date().toISOString();
+      ids.filter(id => mine.has(id) && !have.has(id)).forEach(id => sh.appendRow([id, user.id, now]));
+      return { ok: true };
+    });
+  }
+  if (a === 'notice' && coach) {
+    const text = String(b.text || '').trim(); const to = String(b.to || '');
+    if (!text) return { ok: false, error: 'お知らせが空です' };
+    const ok = to === 'all' || readAll_(book.getSheetByName(SHEET.members)).some(m => String(m.id) === to && m['役割'] !== 'coach');
+    if (!ok) return { ok: false, error: '宛先がちがいます' };
+    return withLock_(() => {
+      const n = { id: 'n' + Utilities.getUuid().slice(0, 8), to, text: clip_(text), at: new Date().toISOString(), by: user.name, byId: user.id, edited: '' };
+      book.getSheetByName(SHEET.notices).appendRow(COLS.notices.map(c => n[c]));
+      return { ok: true, notice: cleanN_(n) };
+    });
+  }
+  if ((a === 'editNotice' || a === 'deleteNotice') && coach) {
+    return withLock_(() => {
+      const sh = book.getSheetByName(SHEET.notices); const v = sh.getDataRange().getValues(); const h = v[0]; const ci = name => h.indexOf(name);
+      for (let i = 1; i < v.length; i++) {
+        if (String(v[i][ci('id')]) !== String(b.noticeId)) continue;
+        if (String(v[i][ci('byId')]) !== user.id) return { ok: false, error: '書いた先生だけが直せます' };
+        if (a === 'deleteNotice') { sh.deleteRow(i + 1); return { ok: true }; }
+        const text = String(b.text || '').trim(); if (!text) return { ok: false, error: 'お知らせが空です' };
+        const now = new Date().toISOString();
+        sh.getRange(i + 1, ci('text') + 1).setValue(clip_(text)); sh.getRange(i + 1, ci('edited') + 1).setValue(now);
+        return { ok: true, notice: cleanN_({ id: v[i][ci('id')], to: v[i][ci('to')], text: clip_(text), at: v[i][ci('at')], by: v[i][ci('by')], byId: v[i][ci('byId')], edited: now }) };
+      }
+      return { ok: false, error: 'お知らせが見つかりません' };
+    });
+  }
   return { ok: false, error: 'できない操作です' };
 }
 
 /** 列が足りない古い表に、見出しを足す（初回の列を足すときは、合言葉の入っている全員を「はじめ」にする） */
 function ensureColumns_(book) {
   Object.keys(SHEET).forEach(k => {
-    const sh = book.getSheetByName(SHEET[k]); const head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    let sh = book.getSheetByName(SHEET[k]);
+    if (!sh) { sh = book.insertSheet(SHEET[k]); sh.getRange(1, 1, sh.getMaxRows(), COLS[k].length).setNumberFormat('@'); sh.getRange(1, 1, 1, COLS[k].length).setValues([COLS[k]]).setFontWeight('bold'); sh.setFrozenRows(1); return; }
+    const head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
     COLS[k].forEach((name, i) => {
       if (head.indexOf(name) !== -1) return;
       sh.getRange(1, i + 1, sh.getMaxRows(), 1).setNumberFormat('@');
@@ -171,6 +214,7 @@ function clean_(r) {
   return o;
 }
 function cleanR_(r) { return { id: String(r.id), entryId: String(r.entryId), text: String(r.text).replace(/^'/, ''), at: String(r.at), by: String(r.by || '佐藤'), byId: String(r.byId || ''), edited: String(r.edited || '') }; }
+function cleanN_(n) { return { id: String(n.id), to: String(n.to), text: String(n.text).replace(/^'/, ''), at: String(n.at), by: String(n.by || '佐藤'), byId: String(n.byId || ''), edited: String(n.edited || '') }; }
 function clip_(s) { s = String(s); if (/^[=+@]/.test(s)) s = "'" + s; return s.slice(0, 4000); }
 function withLock_(fn) { const l = LockService.getScriptLock(); l.waitLock(15000); try { return fn(); } finally { l.releaseLock(); } }
 function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
