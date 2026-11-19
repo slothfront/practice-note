@@ -98,7 +98,7 @@ textarea:focus,input:focus{outline:0;border-color:var(--main)}
 'use strict';
 /* ===== 設定 =====
    GAS_URL が空のあいだは「見本モード」（スマホの中だけで動く・本物には送らない） */
-const GAS_URL = '';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxONTyT55jOqV12OJ_zWSkl8_twA-D3VZa05XI5MdI6baa14Qw06jIdtZdWlyLu8OE2/exec';
 const DEMO = !GAS_URL;
 
 /* ===== 保存（使えない端末でも落ちない） ===== */
@@ -199,16 +199,19 @@ async function flush() {
     catch (err) { if (err.server) { /* 受け口が断った */ } break; }
   }
 }
+function forgetIfBadKey(e) {
+  if (e && e.server && /合言葉/.test(e.message || '')) { ['key', 'name', 'role', 'entries', 'replies', 'outbox', 'seen', 'draft', 'cd'].forEach(k => store.del(k)); location.reload(); }
+}
 async function refresh() {
   if (S.role === 'coach') {
-    try { const j = await api('coachList', { key: S.key }); S.cd = { members: j.members, entries: j.entries, replies: j.replies }; store.set('cd', S.cd); return true; } catch (e) { return false; }
+    try { const j = await api('coachList', { key: S.key }); S.cd = { members: j.members, entries: j.entries, replies: j.replies }; store.set('cd', S.cd); return true; } catch (e) { forgetIfBadKey(e); return false; }
   }
   try {
     await flush();
     const j = await api('list', { key: S.key });
     S.entries = j.entries; S.replies = j.replies; if (j.name) { S.name = j.name; store.set('name', j.name); }
     save(); return true;
-  } catch (e) { return false; }
+  } catch (e) { forgetIfBadKey(e); return false; }
 }
 
 /* ===== 画面 ===== */
