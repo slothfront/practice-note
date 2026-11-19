@@ -93,6 +93,11 @@ textarea:focus,input:focus{outline:0;border-color:var(--main)}
 .kv.lowr{background:#FFF6D1;border-radius:8px;padding:4px 8px}
 .kv.tocoach{background:var(--soft,#eef);border-radius:8px;padding:4px 8px}
 .member{cursor:pointer}
+.rbtns{display:flex;gap:8px;margin-top:6px;white-space:normal}
+.mini-btn{border:1px solid var(--main,#1F4E79);background:#fff;color:var(--ink2,#1F4E79);border-radius:999px;padding:5px 14px;font:inherit;font-size:12px;font-weight:700}
+.mini-btn.del{border-color:#9aa5b1;color:#5b6570}
+.mini-btn.save{background:var(--main,#1F4E79);color:#fff}
+.redit{margin-top:6px;white-space:normal}
 </style>
 </head>
 <body>
@@ -149,7 +154,7 @@ async function demoApi(action, b) {
   const user = db.users[b.key];
   if (!user) { const e = new Error('合言葉がちがいます'); e.server = true; throw e; }
   const isCoach = user.role === 'coach';
-  if (action === 'login') return { ok: true, name: user.name, role: isCoach ? 'coach' : 'student', needSet: false };
+  if (action === 'login') return { ok: true, name: user.name, me: user.id, role: isCoach ? 'coach' : 'student', needSet: false };
   if (action === 'submit' && !isCoach) {
     if (!db.entries.some(x => x.id === b.entry.id)) db.entries.push({ ...b.entry, uid: user.id });
     store.set('demo_db2', db); return { ok: true, id: b.entry.id };
@@ -164,15 +169,17 @@ async function demoApi(action, b) {
   }
   if (action === 'reply' && isCoach) {
     if (!db.entries.some(x => x.id === b.entryId)) { const e = new Error('記録が見つかりません'); e.server = true; throw e; }
-    const r = { id: 'r' + Date.now().toString(36), entryId: b.entryId, text: b.text, at: new Date().toISOString(), by: user.name };
+    const r = { id: 'r' + Date.now().toString(36), entryId: b.entryId, text: b.text, at: new Date().toISOString(), by: user.name, byId: user.id, edited: '' };
     db.replies.push(r); store.set('demo_db2', db); return { ok: true, reply: r };
   }
+  if (action === 'editReply' && isCoach) { const r = db.replies.find(x => x.id === b.replyId); if (!r) throw Object.assign(new Error('返事が見つかりません'), { server: true }); r.text = b.text; r.edited = new Date().toISOString(); store.set('demo_db2', db); return { ok: true, reply: r }; }
+  if (action === 'deleteReply' && isCoach) { db.replies = db.replies.filter(x => x.id !== b.replyId); store.set('demo_db2', db); return { ok: true }; }
   const e = new Error('できない操作です'); e.server = true; throw e;
 }
 
 /* ===== 状態 ===== */
 const S = {
-  key: store.get('key', ''), name: store.get('name', ''), role: store.get('role', 'student'), needSet: store.get('needSet', false),
+  key: store.get('key', ''), name: store.get('name', ''), role: store.get('role', 'student'), needSet: store.get('needSet', false), me: store.get('me', ''), editing: null,
   cd: store.get('cd', { members: [], entries: [], replies: [] }), member: null, showAll: false, repDraft: {},
   entries: store.get('entries', []), replies: store.get('replies', []),
   outbox: store.get('outbox', []), seen: store.get('seen', []),
@@ -191,7 +198,8 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 function toast(msg) { document.querySelectorAll('.toast').forEach(x => x.remove()); const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 2600); }
 const allEntries = () => { const ids = new Set(S.entries.map(e => e.id)); return [...S.entries, ...S.outbox.filter(e => !ids.has(e.id)).map(e => ({ ...e, _wait: true }))].sort((a, b) => b.date.localeCompare(a.date) || (Date.parse(b.at) - Date.parse(a.at))); };
 const repliesFor = id => S.replies.filter(r => r.entryId === id).sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
-const unseen = () => S.replies.filter(r => !S.seen.includes(r.id));
+const rkey = r => r.edited ? `${r.id}@${r.edited}` : r.id;
+const unseen = () => S.replies.filter(r => !S.seen.includes(rkey(r)));
 const lastNext = () => { const e = allEntries()[0]; return e ? e.next || '' : ''; };
 
 /* ===== 同期 ===== */
@@ -204,11 +212,11 @@ async function flush() {
 }
 function forgetIfBadKey(e) {
   if (e && e.server && /先に自分の合言葉/.test(e.message || '')) { S.needSet = true; store.set('needSet', true); render(); return; }
-  if (e && e.server && /合言葉/.test(e.message || '')) { ['key', 'name', 'role', 'needSet', 'entries', 'replies', 'outbox', 'seen', 'draft', 'cd'].forEach(k => store.del(k)); location.reload(); }
+  if (e && e.server && /合言葉/.test(e.message || '')) { ['key', 'name', 'role', 'needSet', 'me', 'entries', 'replies', 'outbox', 'seen', 'draft', 'cd'].forEach(k => store.del(k)); location.reload(); }
 }
 async function refresh() {
   if (S.role === 'coach') {
-    try { const j = await api('coachList', { key: S.key }); S.cd = { members: j.members, entries: j.entries, replies: j.replies }; store.set('cd', S.cd); return true; } catch (e) { forgetIfBadKey(e); return false; }
+    try { const j = await api('coachList', { key: S.key }); S.cd = { members: j.members, entries: j.entries, replies: j.replies }; if (j.me) { S.me = j.me; store.set('me', S.me); } store.set('cd', S.cd); return true; } catch (e) { forgetIfBadKey(e); return false; }
   }
   try {
     await flush();
@@ -242,7 +250,7 @@ function renderLogin(err) {
   $('#go').onclick = async () => {
     const key = $('#pw').value.trim(); if (!key) return;
     $('#go').disabled = true;
-    try { const j = await api('login', { key }); S.key = key; S.name = j.name; S.role = j.role || 'student'; store.set('key', key); store.set('name', j.name); store.set('role', S.role); if (j.needSet) { S.needSet = true; store.set('needSet', true); render(); return; } await refresh(); S.tab = S.role === 'coach' ? 'new' : 'today'; render(); if (S.role !== 'coach') { const n = unseen().length; if (n) toast(`先生からの返事が${n}件あります`); } }
+    try { const j = await api('login', { key }); S.key = key; S.name = j.name; S.role = j.role || 'student'; S.me = j.me || ''; store.set('me', S.me); store.set('key', key); store.set('name', j.name); store.set('role', S.role); if (j.needSet) { S.needSet = true; store.set('needSet', true); render(); return; } await refresh(); S.tab = S.role === 'coach' ? 'new' : 'today'; render(); if (S.role !== 'coach') { const n = unseen().length; if (n) toast(`先生からの返事が${n}件あります`); } }
     catch (e) { renderLogin(e.server ? '合言葉がちがいます。もう一度確かめてください' : 'ネットにつながっていません。つながる所でもう一度'); }
   };
 }
@@ -342,6 +350,12 @@ async function submit() {
   S.tab = 'history'; render(); window.scrollTo(0, 0);
 }
 
+const mineReply = r => r.byId ? r.byId === S.me : (r.by || '佐藤') === S.name;
+function replyHTML(r, coach) {
+  if (coach && S.editing === r.id) return `<div class="coach"><span class="en">COACH</span>　${esc(r.by || '佐藤')}から（直す）
+<textarea class="redit" id="ed_${r.id}">${esc(r.text)}</textarea><div class="rbtns"><button class="mini-btn save" data-rid="${r.id}">保存</button><button class="mini-btn cancel">やめる</button></div></div>`;
+  return `<div class="coach"><span class="en">COACH</span>　${esc(r.by || '佐藤')}から${r.edited ? '<span class="mini">（直しました）</span>' : ''}\n${esc(r.text)}${coach && mineReply(r) ? `<div class="rbtns"><button class="mini-btn edit" data-rid="${r.id}">直す</button><button class="mini-btn del" data-rid="${r.id}">消す</button></div>` : ''}</div>`;
+}
 const isLow = e => fieldsOf(e).some(([n]) => e[n] && e[n] <= 2);
 function entryHTML(e, o) {
   const rs = (o.replies || []);
@@ -360,7 +374,7 @@ function entryHTML(e, o) {
     ${o.coach ? reasons + toc : ''}
     <div class="more">${o.coach ? '' : reasons}${detail}${o.coach ? '' : toc}</div>
     <div class="kv"><span class="k">NEXT　次にどうする</span>${esc(e.next)}</div>
-    ${rs.map(r => `<div class="coach"><span class="en">COACH</span>　${esc(r.by || '佐藤')}から\n${esc(r.text)}</div>`).join('') || (e._wait || o.coach ? '' : '<div class="mini" style="margin-top:6px">（返事はまだ）</div>')}
+    ${rs.map(r => replyHTML(r, o.coach)).join('') || (e._wait || o.coach ? '' : '<div class="mini" style="margin-top:6px">（返事はまだ）</div>')}
     ${o.coach ? `<div class="q">${rs.length ? 'もう一言' : `COACH　${esc(S.name)}から`}</div><textarea class="rep" id="rep_${e.id}" placeholder="一言">${esc(S.repDraft[e.id] || '')}</textarea><button class="btn send" data-id="${e.id}" style="margin-top:8px;padding:11px">返事を送る</button>` : ''}
     <button class="toggle">${o.open ? '閉じる' : '全部の中身を見る'}</button></div>`;
 }
@@ -369,9 +383,9 @@ function bindCards() {
 }
 function renderHistory() {
   const list = allEntries();
-  S.justSeen = unseen().map(r => r.id);
+  S.justSeen = unseen().map(rkey);
   const body = list.length ? list.map(e => {
-    const rs = repliesFor(e.id); const fresh = rs.some(r => S.justSeen.includes(r.id));
+    const rs = repliesFor(e.id); const fresh = rs.some(r => S.justSeen.includes(rkey(r)));
     return entryHTML(e, { replies: rs, tag: e._wait ? '<span class="tag wait">送信待ち</span>' : fresh ? '<span class="tag">NEW</span>' : '' });
   }).join('') : '<p class="mini center" style="margin-top:40px">まだ記録がありません。「今日の記録」から書いてみよう</p>';
   shell(S.name, `<div class="list">${body}</div><div class="foot"><button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);
@@ -380,7 +394,7 @@ function renderHistory() {
 }
 function bindFoot() {
   const r = $('#reload'); if (r) r.onclick = async () => { toast((await refresh()) ? '最新にしました' : 'ネットにつながっていません'); render(); };
-  const l = $('#logout'); if (l) l.onclick = () => { if (!confirm('この端末から合言葉と記録の控えを消します。もう一度使うときは合言葉を入れ直します。よいですか？')) return; ['key', 'name', 'role', 'entries', 'replies', 'outbox', 'seen', 'draft', 'cd'].forEach(k => store.del(k)); location.reload(); };
+  const l = $('#logout'); if (l) l.onclick = () => { if (!confirm('この端末から合言葉と記録の控えを消します。もう一度使うときは合言葉を入れ直します。よいですか？')) return; ['key', 'name', 'role', 'needSet', 'me', 'entries', 'replies', 'outbox', 'seen', 'draft', 'cd'].forEach(k => store.del(k)); location.reload(); };
 }
 
 /* ===== 顧問用 ===== */
@@ -389,6 +403,21 @@ const cSort = list => [...list].sort((a, b) => b.date.localeCompare(a.date) || (
 const memberName = uid => (S.cd.members.find(m => m.id === uid) || {}).name || '？';
 const unreplied = () => S.cd.entries.filter(e => !S.cd.replies.some(r => r.entryId === e.id));
 function bindReplies() {
+  document.querySelectorAll('.mini-btn.edit').forEach(b => b.onclick = () => { S.editing = b.dataset.rid; render(); const t = $('#ed_' + S.editing); if (t) t.focus(); });
+  document.querySelectorAll('.mini-btn.cancel').forEach(b => b.onclick = () => { S.editing = null; render(); });
+  document.querySelectorAll('.mini-btn.save').forEach(b => b.onclick = async () => {
+    const id = b.dataset.rid; const text = ($('#ed_' + id).value || '').trim();
+    if (!text) { toast('空では保存できません。消すときは「消す」を'); return; }
+    b.disabled = true;
+    try { const j = await api('editReply', { key: S.key, replyId: id, text }); S.cd.replies = S.cd.replies.map(r => r.id === id ? j.reply : r); store.set('cd', S.cd); S.editing = null; toast('直しました'); render(); }
+    catch (e) { b.disabled = false; toast(e.server ? e.message : 'ネットにつながっていません。つながってからもう一度'); }
+  });
+  document.querySelectorAll('.mini-btn.del').forEach(b => b.onclick = async () => {
+    if (!confirm('この返事を消します。部員の画面からも消えます。よいですか？')) return;
+    const id = b.dataset.rid; b.disabled = true;
+    try { await api('deleteReply', { key: S.key, replyId: id }); S.cd.replies = S.cd.replies.filter(r => r.id !== id); store.set('cd', S.cd); toast('消しました'); render(); }
+    catch (e) { b.disabled = false; toast(e.server ? e.message : 'ネットにつながっていません。つながってからもう一度'); }
+  });
   document.querySelectorAll('textarea.rep').forEach(t => t.addEventListener('input', () => { S.repDraft[t.id.slice(4)] = t.value; }));
   document.querySelectorAll('.send').forEach(b => b.onclick = async () => {
     const id = b.dataset.id; const text = ($('#rep_' + id).value || '').trim();

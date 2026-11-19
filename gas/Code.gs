@@ -10,7 +10,7 @@ const COLS = {
   members: ['合言葉', 'id', '名前', '役割', '初回'],
   entries: ['id', 'uid', 'date', 'type', 'focus', 'opp', 'n1', 'n2', 'n3', 'n4', 'r1', 'r2', 'r3', 'r4',
             'good', 'bad', 'heard', 'mgood', 'mbad', 'tgood', 'tbad', 'mprac', 'tocoach', 'next', 'at', 'received'],
-  replies: ['id', 'entryId', 'text', 'at', 'by']
+  replies: ['id', 'entryId', 'text', 'at', 'by', 'byId', 'edited']
 };
 const SHEET = { members: '部員', entries: '記録', replies: '返事' };
 
@@ -65,7 +65,7 @@ function handle_(b) {
   if (!user) return { ok: false, error: '合言葉がちがいます' };
   const coach = user.role === 'coach';
   const a = b.action;
-  if (a === 'login') return { ok: true, name: user.name, role: coach ? 'coach' : 'student', needSet: user.first };
+  if (a === 'login') return { ok: true, name: user.name, me: user.id, role: coach ? 'coach' : 'student', needSet: user.first };
   if (a === 'setKey') {
     const nk = String(b.newKey || '').trim();
     if (nk.length < 4 || nk.length > 30 || /\s/.test(nk)) return { ok: false, error: '合言葉は4〜30文字、空白なしで決めてください' };
@@ -98,16 +98,35 @@ function handle_(b) {
     const members = readAll_(book.getSheetByName(SHEET.members)).filter(r => r['役割'] !== 'coach' && r['名前']).map(r => ({ id: String(r.id), name: String(r['名前']) }));
     const entries = readAll_(book.getSheetByName(SHEET.entries)).map(r => Object.assign(clean_(r), { uid: String(r.uid) }));
     const replies = readAll_(book.getSheetByName(SHEET.replies)).map(cleanR_);
-    return { ok: true, name: user.name, members, entries, replies };
+    return { ok: true, name: user.name, me: user.id, members, entries, replies };
   }
   if (a === 'reply' && coach) {
     const text = String(b.text || '').trim();
     if (!text) return { ok: false, error: '返事が空です' };
     return withLock_(() => {
       if (!readAll_(book.getSheetByName(SHEET.entries)).some(r => r.id === b.entryId)) return { ok: false, error: '記録が見つかりません' };
-      const r = { id: 'r' + Utilities.getUuid().slice(0, 8), entryId: String(b.entryId), text: clip_(text), at: new Date().toISOString(), by: user.name };
+      const r = { id: 'r' + Utilities.getUuid().slice(0, 8), entryId: String(b.entryId), text: clip_(text), at: new Date().toISOString(), by: user.name, byId: user.id, edited: '' };
       book.getSheetByName(SHEET.replies).appendRow(COLS.replies.map(c => r[c]));
       return { ok: true, reply: r };
+    });
+  }
+  if ((a === 'editReply' || a === 'deleteReply') && coach) {
+    return withLock_(() => {
+      const sh = book.getSheetByName(SHEET.replies); const v = sh.getDataRange().getValues(); const h = v[0];
+      const ci = name => h.indexOf(name);
+      for (let i = 1; i < v.length; i++) {
+        if (String(v[i][ci('id')]) !== String(b.replyId)) continue;
+        const byId = String(v[i][ci('byId')] || ''), by = String(v[i][ci('by')] || '佐藤');
+        if (byId ? byId !== user.id : by !== user.name) return { ok: false, error: '書いた先生だけが直せます' };
+        if (a === 'deleteReply') { sh.deleteRow(i + 1); return { ok: true }; }
+        const text = String(b.text || '').trim();
+        if (!text) return { ok: false, error: '返事が空です' };
+        const now = new Date().toISOString();
+        sh.getRange(i + 1, ci('text') + 1).setValue(clip_(text));
+        sh.getRange(i + 1, ci('edited') + 1).setValue(now);
+        return { ok: true, reply: cleanR_({ id: v[i][ci('id')], entryId: v[i][ci('entryId')], text: clip_(text), at: v[i][ci('at')], by, byId, edited: now }) };
+      }
+      return { ok: false, error: '返事が見つかりません' };
     });
   }
   return { ok: false, error: 'できない操作です' };
@@ -151,7 +170,7 @@ function clean_(r) {
   ['id', 'date', 'type', 'at'].forEach(k => o[k] = String(o[k]));
   return o;
 }
-function cleanR_(r) { return { id: String(r.id), entryId: String(r.entryId), text: String(r.text), at: String(r.at), by: String(r.by || '佐藤') }; }
+function cleanR_(r) { return { id: String(r.id), entryId: String(r.entryId), text: String(r.text).replace(/^'/, ''), at: String(r.at), by: String(r.by || '佐藤'), byId: String(r.byId || ''), edited: String(r.edited || '') }; }
 function clip_(s) { s = String(s); if (/^[=+@]/.test(s)) s = "'" + s; return s.slice(0, 4000); }
 function withLock_(fn) { const l = LockService.getScriptLock(); l.waitLock(15000); try { return fn(); } finally { l.releaseLock(); } }
 function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
