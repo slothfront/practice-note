@@ -1,17 +1,17 @@
 /**
  * PRACTICE NOTE（練習ノート）受け口
  * 1) setupPracticeNote を1回だけ実行 → 表「PRACTICE NOTE 記録」ができる
- * 2) 表の「部員」シートに名前を書く（先生はD列に coach）→ makeKeys を実行すると「はじめの合言葉」が入る（E列＝はじめ）
+ * 2) 表の「部員」シートに名前を書く（先生はD列に coach・部員はF列に学年の数字 1／2／3）→ makeKeys を実行すると「はじめの合言葉」が入る（E列＝はじめ）
  *    はじめの合言葉で開くと、アプリが自分の合言葉を決めさせる。忘れた人は、A列を書き換えてE列に「はじめ」と書けば、もう一度決め直せる
  * 3) デプロイ → 新しいデプロイ → 種類「ウェブアプリ」・実行ユーザー「自分」・アクセス「全員」→ URLをアプリに貼る
  */
 const PROP_ID = 'PN_SHEET_ID';
 const COLS = {
-  members: ['合言葉', 'id', '名前', '役割', '初回'],
+  members: ['合言葉', 'id', '名前', '役割', '初回', '学年'],
   entries: ['id', 'uid', 'date', 'type', 'focus', 'opp', 'n1', 'n2', 'n3', 'n4', 'r1', 'r2', 'r3', 'r4',
             'good', 'bad', 'heard', 'mgood', 'mbad', 'tgood', 'tbad', 'mprac', 'tocoach', 'next', 'at', 'received'],
   replies: ['id', 'entryId', 'text', 'at', 'by', 'byId', 'edited'],
-  notices: ['id', 'to', 'text', 'at', 'by', 'byId', 'edited'],
+  notices: ['id', 'to', 'text', 'at', 'by', 'byId', 'edited', 'targets'],
   reads: ['noticeId', 'uid', 'at']
 };
 const SHEET = { members: '部員', entries: '記録', replies: '返事', notices: 'お知らせ', reads: '既読' };
@@ -94,11 +94,11 @@ function handle_(b) {
     const entries = readAll_(book.getSheetByName(SHEET.entries)).filter(r => r.uid === user.id).map(clean_);
     const ids = new Set(entries.map(x => x.id));
     const replies = readAll_(book.getSheetByName(SHEET.replies)).filter(r => ids.has(r.entryId)).map(cleanR_);
-    const notices = readAll_(book.getSheetByName(SHEET.notices)).filter(n => n.to === 'all' || n.to === user.id).map(cleanN_);
+    const notices = readAll_(book.getSheetByName(SHEET.notices)).filter(n => forUser_(n, user)).map(cleanN_);
     return { ok: true, name: user.name, entries, replies, notices };
   }
   if (a === 'coachList' && coach) {
-    const members = readAll_(book.getSheetByName(SHEET.members)).filter(r => r['役割'] !== 'coach' && r['名前']).map(r => ({ id: String(r.id), name: String(r['名前']) }));
+    const members = readAll_(book.getSheetByName(SHEET.members)).filter(r => r['役割'] !== 'coach' && r['名前']).map(r => ({ id: String(r.id), name: String(r['名前']), grade: gradeOf_(r['学年']) }));
     const entries = readAll_(book.getSheetByName(SHEET.entries)).map(r => Object.assign(clean_(r), { uid: String(r.uid) }));
     const replies = readAll_(book.getSheetByName(SHEET.replies)).map(cleanR_);
     const notices = readAll_(book.getSheetByName(SHEET.notices)).map(cleanN_);
@@ -138,7 +138,7 @@ function handle_(b) {
     const ids = (b.ids || []).map(String).slice(0, 200);
     return withLock_(() => {
       const sh = book.getSheetByName(SHEET.reads); const have = new Set(readAll_(sh).filter(r => String(r.uid) === user.id).map(r => String(r.noticeId)));
-      const mine = new Set(readAll_(book.getSheetByName(SHEET.notices)).filter(n => n.to === 'all' || n.to === user.id).map(n => String(n.id)));
+      const mine = new Set(readAll_(book.getSheetByName(SHEET.notices)).filter(n => forUser_(n, user)).map(n => String(n.id)));
       const now = new Date().toISOString();
       ids.filter(id => mine.has(id) && !have.has(id)).forEach(id => sh.appendRow([id, user.id, now]));
       return { ok: true };
@@ -147,10 +147,15 @@ function handle_(b) {
   if (a === 'notice' && coach) {
     const text = String(b.text || '').trim(); const to = String(b.to || '');
     if (!text) return { ok: false, error: 'お知らせが空です' };
-    const ok = to === 'all' || readAll_(book.getSheetByName(SHEET.members)).some(m => String(m.id) === to && m['役割'] !== 'coach');
-    if (!ok) return { ok: false, error: '宛先がちがいます' };
+    const studs = readAll_(book.getSheetByName(SHEET.members)).filter(m => m['役割'] !== 'coach' && m['名前']);
+    let targets = '';
+    if (/^grade:\d$/.test(to)) {
+      const g = to.slice(6); const ids = studs.filter(m => gradeOf_(m['学年']) === g).map(m => String(m.id));
+      if (!ids.length) return { ok: false, error: 'その学年の部員がいません' };
+      targets = ids.join(',');
+    } else if (!(to === 'all' || studs.some(m => String(m.id) === to))) return { ok: false, error: '宛先がちがいます' };
     return withLock_(() => {
-      const n = { id: 'n' + Utilities.getUuid().slice(0, 8), to, text: clip_(text), at: new Date().toISOString(), by: user.name, byId: user.id, edited: '' };
+      const n = { id: 'n' + Utilities.getUuid().slice(0, 8), to, text: clip_(text), at: new Date().toISOString(), by: user.name, byId: user.id, edited: '', targets };
       book.getSheetByName(SHEET.notices).appendRow(COLS.notices.map(c => n[c]));
       return { ok: true, notice: cleanN_(n) };
     });
@@ -165,7 +170,7 @@ function handle_(b) {
         const text = String(b.text || '').trim(); if (!text) return { ok: false, error: 'お知らせが空です' };
         const now = new Date().toISOString();
         sh.getRange(i + 1, ci('text') + 1).setValue(clip_(text)); sh.getRange(i + 1, ci('edited') + 1).setValue(now);
-        return { ok: true, notice: cleanN_({ id: v[i][ci('id')], to: v[i][ci('to')], text: clip_(text), at: v[i][ci('at')], by: v[i][ci('by')], byId: v[i][ci('byId')], edited: now }) };
+        return { ok: true, notice: cleanN_({ id: v[i][ci('id')], to: v[i][ci('to')], text: clip_(text), at: v[i][ci('at')], by: v[i][ci('by')], byId: v[i][ci('byId')], edited: now, targets: v[i][ci('targets')] }) };
       }
       return { ok: false, error: 'お知らせが見つかりません' };
     });
@@ -200,7 +205,7 @@ function book_() {
 function findUser_(book, key) {
   key = String(key || '').trim(); if (!key) return null;
   const r = readAll_(book.getSheetByName(SHEET.members)).find(x => String(x['合言葉']) === key && x['名前']);
-  return r ? { id: String(r.id), name: String(r['名前']), role: String(r['役割'] || 'student'), first: String(r['初回'] || '') !== '' } : null;
+  return r ? { id: String(r.id), name: String(r['名前']), role: String(r['役割'] || 'student'), first: String(r['初回'] || '') !== '', grade: gradeOf_(r['学年']) } : null;
 }
 function readAll_(sh) {
   const v = sh.getDataRange().getValues(); const h = v[0];
@@ -214,7 +219,11 @@ function clean_(r) {
   return o;
 }
 function cleanR_(r) { return { id: String(r.id), entryId: String(r.entryId), text: String(r.text).replace(/^'/, ''), at: String(r.at), by: String(r.by || '佐藤'), byId: String(r.byId || ''), edited: String(r.edited || '') }; }
-function cleanN_(n) { return { id: String(n.id), to: String(n.to), text: String(n.text).replace(/^'/, ''), at: String(n.at), by: String(n.by || '佐藤'), byId: String(n.byId || ''), edited: String(n.edited || '') }; }
+function cleanN_(n) { return { id: String(n.id), to: String(n.to), targets: String(n.targets || ''), text: String(n.text).replace(/^'/, ''), at: String(n.at), by: String(n.by || '佐藤'), byId: String(n.byId || ''), edited: String(n.edited || '') }; }
+/** 学年の欄から数字だけ取り出す（「2」「2年」どちらでも） */
+function gradeOf_(v) { const m = String(v == null ? '' : v).normalize('NFKC').match(/[1-3]/); return m ? m[0] : ''; }
+/** そのお知らせがこの部員あてか（学年あては、送ったときの部員の一覧で決める） */
+function forUser_(n, user) { const to = String(n.to); if (to === 'all' || to === user.id) return true; return /^grade:/.test(to) && String(n.targets || '').split(',').indexOf(user.id) !== -1; }
 function clip_(s) { s = String(s); if (/^[=+@]/.test(s)) s = "'" + s; return s.slice(0, 4000); }
 function withLock_(fn) { const l = LockService.getScriptLock(); l.waitLock(15000); try { return fn(); } finally { l.releaseLock(); } }
 function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
