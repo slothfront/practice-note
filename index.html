@@ -287,7 +287,7 @@ function renderToday() {
   <div class="h"><span class="en">NEXT</span><span class="ja">次にどうする</span></div><div class="hint">1つだけ。次の「今日意識すること」になる</div>
   <textarea id="next" placeholder="次にやること">${esc(d.next)}</textarea>
   ${M ? `<div class="h"><span class="en">TO COACH</span><span class="ja">顧問に伝えたいこと</span></div><div class="hint">あれば</div>
-  <textarea id="tocoach" placeholder="（書かなくてもよい）">${esc(d.tocoach)}</textarea>` : ''}
+  <textarea id="tocoach">${esc(d.tocoach)}</textarea>` : ''}
   <button class="btn" id="submit">提出</button>
   <p class="mini center">電波が無いときは、つながったときに自動で送ります</p>`);
   document.querySelectorAll('.dot').forEach(b => b.onclick = () => { saveDraft(); d[b.dataset.n] = Number(b.dataset.v); store.set('draft', d); renderToday(); });
