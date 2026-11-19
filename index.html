@@ -270,9 +270,9 @@ function renderToday() {
   <div class="h"><span class="en">MATCH REVIEW</span><span class="ja">試合のふり返り</span></div><div class="hint">全部書く。場面と「なぜ」を入れて</div>
   ${MQ.map(([k, q, h]) => `<div class="q">${q}${h ? `<span class="mini">（${h}）</span>` : ''}</div><textarea id="${k}">${esc(d[k])}</textarea>`).join('')}` : `
   <div class="h"><span class="en">REVIEW</span><span class="ja">ふり返り</span></div><div class="hint">書けるものだけでOK</div>
-  <div class="q">今日よかったプレーは？</div><textarea id="good" placeholder="（書かなくてもよい）">${esc(d.good)}</textarea>
-  <div class="q">うまくいかなかったのは？なぜ？</div><textarea id="bad" placeholder="（書かなくてもよい）">${esc(d.bad)}</textarea>
-  <div class="q">誰かに言われたこと・気づいたことは？</div><textarea id="heard" placeholder="（書かなくてもよい）">${esc(d.heard)}</textarea>`;
+  <div class="q">今日よかったプレーは？</div><textarea id="good">${esc(d.good)}</textarea>
+  <div class="q">うまくいかなかったのは？なぜ？</div><textarea id="bad">${esc(d.bad)}</textarea>
+  <div class="q">誰かに言われたこと・気づいたことは？</div><textarea id="heard">${esc(d.heard)}</textarea>`;
   shell(`${jdate(today())}　${S.name}`, `
   ${S.outbox.length ? `<div class="pending">送信待ち ${S.outbox.length}件。ネットにつながったら自動で送ります</div>` : ''}
   ${done ? `<div class="mini">今日はもう${done}回提出しています。もう一度出すと、もう1件追加されます</div>` : ''}
