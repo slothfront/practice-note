@@ -3,7 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#1F4E79">
+<meta name="theme-color" content="#22B3A6">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>PRACTICE NOTE</title>
 <style>
 :root{--navy:#1F4E79;--blue:#2E75B6;--pale:#DDEBF7;--yellow:#FFC000;--ink:#1a1a1a;--gray:#6f7782;--line:#d0d7e1;--bg:#f6f8fb}
@@ -438,6 +441,11 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 render();
 if (S.key && S.role === 'coach') refresh().then(ok => { if (ok) render(); });
 else if (S.key) refresh().then(ok => { if (ok && S.tab !== 'today') render(); else if (ok) { const n = unseen().length; if (n) { toast(`佐藤からの返事が${n}件あります`); render(); } } });
+</script>
+<script>
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+}
 </script>
 </body>
 </html>
