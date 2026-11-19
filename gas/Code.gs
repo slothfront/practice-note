@@ -1,15 +1,16 @@
 /**
  * PRACTICE NOTE（練習ノート）受け口
  * 1) setupPracticeNote を1回だけ実行 → 表「PRACTICE NOTE 記録」ができる
- * 2) 表の「部員」シートに名前を書く（顧問の行は最初から入っている）→ makeKeys を実行すると合言葉が入る
+ * 2) 表の「部員」シートに名前を書く（先生はD列に coach）→ makeKeys を実行すると「はじめの合言葉」が入る（E列＝はじめ）
+ *    はじめの合言葉で開くと、アプリが自分の合言葉を決めさせる。忘れた人は、A列を書き換えてE列に「はじめ」と書けば、もう一度決め直せる
  * 3) デプロイ → 新しいデプロイ → 種類「ウェブアプリ」・実行ユーザー「自分」・アクセス「全員」→ URLをアプリに貼る
  */
 const PROP_ID = 'PN_SHEET_ID';
 const COLS = {
-  members: ['合言葉', 'id', '名前', '役割'],
+  members: ['合言葉', 'id', '名前', '役割', '初回'],
   entries: ['id', 'uid', 'date', 'type', 'focus', 'opp', 'n1', 'n2', 'n3', 'n4', 'r1', 'r2', 'r3', 'r4',
             'good', 'bad', 'heard', 'mgood', 'mbad', 'tgood', 'tbad', 'mprac', 'tocoach', 'next', 'at', 'received'],
-  replies: ['id', 'entryId', 'text', 'at']
+  replies: ['id', 'entryId', 'text', 'at', 'by']
 };
 const SHEET = { members: '部員', entries: '記録', replies: '返事' };
 
@@ -30,6 +31,7 @@ function setupPracticeNote() {
 
 /** 名前があって合言葉が空の行に、合言葉とidを入れる */
 function makeKeys() {
+  ensureColumns_(book_());
   const sh = book_().getSheetByName(SHEET.members);
   const v = sh.getDataRange().getValues();
   const words = ['sora', 'umi', 'kaze', 'hoshi', 'niji', 'mori', 'yuki', 'hana', 'tsuki', 'kumo', 'nami', 'hikari'];
@@ -38,7 +40,7 @@ function makeKeys() {
     if (!v[i][2]) continue;
     if (!v[i][0]) {
       let k; do { k = words[Math.floor(Math.random() * words.length)] + (1000 + Math.floor(Math.random() * 9000)); } while (used.has(k));
-      used.add(k); sh.getRange(i + 1, 1).setValue(k);
+      used.add(k); sh.getRange(i + 1, 1).setValue(k); sh.getRange(i + 1, 5).setValue('はじめ');
     }
     if (!v[i][1]) sh.getRange(i + 1, 2).setValue('u' + Utilities.getUuid().slice(0, 8));
     if (!v[i][3]) sh.getRange(i + 1, 4).setValue('student');
@@ -58,11 +60,23 @@ function doGet() { return json_({ ok: true, app: 'PRACTICE NOTE' }); }
 
 function handle_(b) {
   const book = book_();
+  ensureColumns_(book);
   const user = findUser_(book, b.key);
   if (!user) return { ok: false, error: '合言葉がちがいます' };
   const coach = user.role === 'coach';
   const a = b.action;
-  if (a === 'login') return { ok: true, name: user.name, role: coach ? 'coach' : 'student' };
+  if (a === 'login') return { ok: true, name: user.name, role: coach ? 'coach' : 'student', needSet: user.first };
+  if (a === 'setKey') {
+    const nk = String(b.newKey || '').trim();
+    if (nk.length < 4 || nk.length > 30 || /\s/.test(nk)) return { ok: false, error: '合言葉は4〜30文字、空白なしで決めてください' };
+    return withLock_(() => {
+      const sh = book.getSheetByName(SHEET.members); const v = sh.getDataRange().getValues();
+      if (v.slice(1).some(r => String(r[0]) === nk && String(r[1]) !== user.id)) return { ok: false, error: 'その合言葉はほかの人が使っています。別のものにしてください' };
+      for (let i = 1; i < v.length; i++) if (String(v[i][1]) === user.id) { sh.getRange(i + 1, 1).setValue(clip_(nk)); sh.getRange(i + 1, 5).setValue(''); return { ok: true }; }
+      return { ok: false, error: '見つかりません' };
+    });
+  }
+  if (user.first) return { ok: false, error: '先に自分の合言葉を決めてください' };
   if (a === 'submit' && !coach) {
     const en = b.entry || {};
     if (!en.id || !en.date) return { ok: false, error: '記録の形がちがいます' };
@@ -91,12 +105,28 @@ function handle_(b) {
     if (!text) return { ok: false, error: '返事が空です' };
     return withLock_(() => {
       if (!readAll_(book.getSheetByName(SHEET.entries)).some(r => r.id === b.entryId)) return { ok: false, error: '記録が見つかりません' };
-      const r = { id: 'r' + Utilities.getUuid().slice(0, 8), entryId: String(b.entryId), text: clip_(text), at: new Date().toISOString() };
+      const r = { id: 'r' + Utilities.getUuid().slice(0, 8), entryId: String(b.entryId), text: clip_(text), at: new Date().toISOString(), by: user.name };
       book.getSheetByName(SHEET.replies).appendRow(COLS.replies.map(c => r[c]));
       return { ok: true, reply: r };
     });
   }
   return { ok: false, error: 'できない操作です' };
+}
+
+/** 列が足りない古い表に、見出しを足す（初回の列を足すときは、合言葉の入っている全員を「はじめ」にする） */
+function ensureColumns_(book) {
+  Object.keys(SHEET).forEach(k => {
+    const sh = book.getSheetByName(SHEET[k]); const head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    COLS[k].forEach((name, i) => {
+      if (head.indexOf(name) !== -1) return;
+      sh.getRange(1, i + 1, sh.getMaxRows(), 1).setNumberFormat('@');
+      sh.getRange(1, i + 1).setValue(name).setFontWeight('bold');
+      if (k === 'members' && name === '初回') {
+        const v = sh.getDataRange().getValues();
+        for (let r = 1; r < v.length; r++) if (v[r][0] !== '') sh.getRange(r + 1, i + 1).setValue('はじめ');
+      }
+    });
+  });
 }
 
 /* ---- 道具 ---- */
@@ -108,7 +138,7 @@ function book_() {
 function findUser_(book, key) {
   key = String(key || '').trim(); if (!key) return null;
   const r = readAll_(book.getSheetByName(SHEET.members)).find(x => String(x['合言葉']) === key && x['名前']);
-  return r ? { id: String(r.id), name: String(r['名前']), role: String(r['役割'] || 'student') } : null;
+  return r ? { id: String(r.id), name: String(r['名前']), role: String(r['役割'] || 'student'), first: String(r['初回'] || '') !== '' } : null;
 }
 function readAll_(sh) {
   const v = sh.getDataRange().getValues(); const h = v[0];
@@ -121,7 +151,7 @@ function clean_(r) {
   ['id', 'date', 'type', 'at'].forEach(k => o[k] = String(o[k]));
   return o;
 }
-function cleanR_(r) { return { id: String(r.id), entryId: String(r.entryId), text: String(r.text), at: String(r.at) }; }
+function cleanR_(r) { return { id: String(r.id), entryId: String(r.entryId), text: String(r.text), at: String(r.at), by: String(r.by || '佐藤') }; }
 function clip_(s) { s = String(s); if (/^[=+@]/.test(s)) s = "'" + s; return s.slice(0, 4000); }
 function withLock_(fn) { const l = LockService.getScriptLock(); l.waitLock(15000); try { return fn(); } finally { l.releaseLock(); } }
 function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }

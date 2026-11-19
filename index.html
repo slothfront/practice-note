@@ -149,7 +149,7 @@ async function demoApi(action, b) {
   const user = db.users[b.key];
   if (!user) { const e = new Error('合言葉がちがいます'); e.server = true; throw e; }
   const isCoach = user.role === 'coach';
-  if (action === 'login') return { ok: true, name: user.name, role: isCoach ? 'coach' : 'student' };
+  if (action === 'login') return { ok: true, name: user.name, role: isCoach ? 'coach' : 'student', needSet: false };
   if (action === 'submit' && !isCoach) {
     if (!db.entries.some(x => x.id === b.entry.id)) db.entries.push({ ...b.entry, uid: user.id });
     store.set('demo_db2', db); return { ok: true, id: b.entry.id };
@@ -164,7 +164,7 @@ async function demoApi(action, b) {
   }
   if (action === 'reply' && isCoach) {
     if (!db.entries.some(x => x.id === b.entryId)) { const e = new Error('記録が見つかりません'); e.server = true; throw e; }
-    const r = { id: 'r' + Date.now().toString(36), entryId: b.entryId, text: b.text, at: new Date().toISOString() };
+    const r = { id: 'r' + Date.now().toString(36), entryId: b.entryId, text: b.text, at: new Date().toISOString(), by: user.name };
     db.replies.push(r); store.set('demo_db2', db); return { ok: true, reply: r };
   }
   const e = new Error('できない操作です'); e.server = true; throw e;
@@ -172,7 +172,7 @@ async function demoApi(action, b) {
 
 /* ===== 状態 ===== */
 const S = {
-  key: store.get('key', ''), name: store.get('name', ''), role: store.get('role', 'student'),
+  key: store.get('key', ''), name: store.get('name', ''), role: store.get('role', 'student'), needSet: store.get('needSet', false),
   cd: store.get('cd', { members: [], entries: [], replies: [] }), member: null, showAll: false, repDraft: {},
   entries: store.get('entries', []), replies: store.get('replies', []),
   outbox: store.get('outbox', []), seen: store.get('seen', []),
@@ -203,7 +203,8 @@ async function flush() {
   }
 }
 function forgetIfBadKey(e) {
-  if (e && e.server && /合言葉/.test(e.message || '')) { ['key', 'name', 'role', 'entries', 'replies', 'outbox', 'seen', 'draft', 'cd'].forEach(k => store.del(k)); location.reload(); }
+  if (e && e.server && /先に自分の合言葉/.test(e.message || '')) { S.needSet = true; store.set('needSet', true); render(); return; }
+  if (e && e.server && /合言葉/.test(e.message || '')) { ['key', 'name', 'role', 'needSet', 'entries', 'replies', 'outbox', 'seen', 'draft', 'cd'].forEach(k => store.del(k)); location.reload(); }
 }
 async function refresh() {
   if (S.role === 'coach') {
@@ -222,7 +223,7 @@ function shell(sub, body) {
   const n = S.role === 'coach' ? 0 : unseen().length;
   $('#app').innerHTML = (DEMO ? '<div class="demo">見本モード（本物には送られません）</div>' : '') +
     `<header><div class="t en">PRACTICE NOTE</div><div class="s">${esc(sub)}</div></header>` +
-    (S.key ? (S.role === 'coach'
+    (S.key && !S.needSet ? (S.role === 'coach'
       ? `<nav>${[['new', '新しい記録'], ['members', '部員ごと']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'new' && unreplied().length ? `<span class="badge">${unreplied().length}</span>` : ''}</button>`).join('')}</nav>`
       : `<nav>${[['today', '今日の記録'], ['history', 'これまで'], ['graph', 'グラフ']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'history' && n ? `<span class="badge">返事 ${n}</span>` : ''}</button>`).join('')}</nav>`) : '') +
     `<main>${body}</main>`;
@@ -241,8 +242,26 @@ function renderLogin(err) {
   $('#go').onclick = async () => {
     const key = $('#pw').value.trim(); if (!key) return;
     $('#go').disabled = true;
-    try { const j = await api('login', { key }); S.key = key; S.name = j.name; S.role = j.role || 'student'; store.set('key', key); store.set('name', j.name); store.set('role', S.role); await refresh(); S.tab = S.role === 'coach' ? 'new' : 'today'; render(); if (S.role !== 'coach') { const n = unseen().length; if (n) toast(`佐藤からの返事が${n}件あります`); } }
+    try { const j = await api('login', { key }); S.key = key; S.name = j.name; S.role = j.role || 'student'; store.set('key', key); store.set('name', j.name); store.set('role', S.role); if (j.needSet) { S.needSet = true; store.set('needSet', true); render(); return; } await refresh(); S.tab = S.role === 'coach' ? 'new' : 'today'; render(); if (S.role !== 'coach') { const n = unseen().length; if (n) toast(`先生からの返事が${n}件あります`); } }
     catch (e) { renderLogin(e.server ? '合言葉がちがいます。もう一度確かめてください' : 'ネットにつながっていません。つながる所でもう一度'); }
+  };
+}
+
+function renderSetKey(err) {
+  shell(S.name ? S.name + 'さん' : '', `<div class="login"><div class="big en">PRACTICE NOTE</div>
+  <div class="card" style="margin-top:24px"><div class="h" style="margin-top:0"><span class="en">NEW PASSWORD</span><span class="ja">自分の合言葉を決める</span></div>
+  <div class="hint">これから使う合言葉を決めてください。4〜30文字、空白なし。ほかの人に教えない。忘れたら佐藤に言えば決め直せます</div>
+  <div class="q">合言葉</div><input id="nk1" autocomplete="off" autocapitalize="off" spellcheck="false">
+  <div class="q">もう一度</div><input id="nk2" autocomplete="off" autocapitalize="off" spellcheck="false">
+  ${err ? `<div class="err">${esc(err)}</div>` : ''}</div>
+  <button class="btn" id="setk">決める</button></div>`);
+  $('#setk').onclick = async () => {
+    const a = $('#nk1').value.trim(), b = $('#nk2').value.trim();
+    if (a.length < 4 || a.length > 30 || /\s/.test(a)) return renderSetKey('4〜30文字、空白なしで決めてください');
+    if (a !== b) return renderSetKey('2回の合言葉がちがいます');
+    $('#setk').disabled = true;
+    try { await api('setKey', { key: S.key, newKey: a }); S.key = a; store.set('key', a); S.needSet = false; store.del('needSet'); await refresh(); S.tab = S.role === 'coach' ? 'new' : 'today'; render(); toast('合言葉を決めました'); }
+    catch (e) { renderSetKey(e.server ? e.message : 'ネットにつながっていません。つながる所でもう一度'); }
   };
 }
 
@@ -341,8 +360,8 @@ function entryHTML(e, o) {
     ${o.coach ? reasons + toc : ''}
     <div class="more">${o.coach ? '' : reasons}${detail}${o.coach ? '' : toc}</div>
     <div class="kv"><span class="k">NEXT　次にどうする</span>${esc(e.next)}</div>
-    ${rs.map(r => `<div class="coach"><span class="en">COACH</span>　佐藤から\n${esc(r.text)}</div>`).join('') || (e._wait || o.coach ? '' : '<div class="mini" style="margin-top:6px">（返事はまだ）</div>')}
-    ${o.coach ? `<div class="q">${rs.length ? 'もう一言' : 'COACH　佐藤から'}</div><textarea class="rep" id="rep_${e.id}" placeholder="一言">${esc(S.repDraft[e.id] || '')}</textarea><button class="btn send" data-id="${e.id}" style="margin-top:8px;padding:11px">返事を送る</button>` : ''}
+    ${rs.map(r => `<div class="coach"><span class="en">COACH</span>　${esc(r.by || '佐藤')}から\n${esc(r.text)}</div>`).join('') || (e._wait || o.coach ? '' : '<div class="mini" style="margin-top:6px">（返事はまだ）</div>')}
+    ${o.coach ? `<div class="q">${rs.length ? 'もう一言' : `COACH　${esc(S.name)}から`}</div><textarea class="rep" id="rep_${e.id}" placeholder="一言">${esc(S.repDraft[e.id] || '')}</textarea><button class="btn send" data-id="${e.id}" style="margin-top:8px;padding:11px">返事を送る</button>` : ''}
     <button class="toggle">${o.open ? '閉じる' : '全部の中身を見る'}</button></div>`;
 }
 function bindCards() {
@@ -430,6 +449,7 @@ function renderGraph() {
 
 function render() {
   if (!S.key) return renderLogin();
+  if (S.needSet) return renderSetKey();
   if (S.role === 'coach') return renderCoach();
   if (S.tab === 'history') return renderHistory();
   if (S.tab === 'graph') return renderGraph();
@@ -440,7 +460,7 @@ window.addEventListener('online', async () => { await refresh(); render(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveDraft(); });
 render();
 if (S.key && S.role === 'coach') refresh().then(ok => { if (ok) render(); });
-else if (S.key) refresh().then(ok => { if (ok && S.tab !== 'today') render(); else if (ok) { const n = unseen().length; if (n) { toast(`佐藤からの返事が${n}件あります`); render(); } } });
+else if (S.key) refresh().then(ok => { if (ok && S.tab !== 'today') render(); else if (ok) { const n = unseen().length; if (n) { toast(`先生からの返事が${n}件あります`); render(); } } });
 </script>
 <script>
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
