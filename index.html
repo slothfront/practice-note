@@ -102,6 +102,20 @@ textarea:focus,input:focus{outline:0;border-color:var(--main)}
 .notice.fresh{border-left-color:var(--acc2,#FFC000)}
 .ntext{white-space:pre-wrap;font-size:14px;line-height:1.6;margin-top:4px}
 details.oldn,details.who{margin:4px 0 8px}details.oldn summary,details.who summary{font-size:12px;color:var(--main,#1F4E79);cursor:pointer;padding:4px 0}
+/* レポート */
+.rep h4{margin:14px 0 4px;color:var(--ink2,#1F4E79);font-size:14px}
+.rep p{margin:4px 0;font-size:14px;line-height:1.65}
+.rnote{font-size:12px;color:var(--gray);line-height:1.5}
+.rep figure{margin:8px 0 10px;background:#fff;border-radius:14px;padding:6px}
+.rep figure img{width:100%;height:auto;max-height:62vh;object-fit:contain;display:block;margin:0 auto}
+.rep figcaption{font-size:11px;color:var(--gray);margin-top:2px}
+.sline{font-size:13px;margin:3px 0;line-height:1.5}.sline b{color:var(--ink2,#1F4E79);margin-right:6px}
+.subh{font-size:12px;font-weight:800;color:var(--main,#1F4E79);margin:10px 0 2px}
+.lastm{background:#fff;border-radius:16px;padding:10px 12px;margin-bottom:10px;box-shadow:0 2px 8px rgba(30,60,100,.07);border-left:6px solid var(--ink2,#1F4E79)}
+.lastm .kv{margin:3px 0}
+details.mrep{margin-bottom:10px}details.mrep>summary{list-style:none;cursor:pointer}
+details.mrep>summary::-webkit-details-marker{display:none}
+.mapr{display:flex;align-items:center;gap:8px;margin:6px 0}.mapr span{width:96px;font-size:13px;font-weight:700}.mapr select{flex:1}
 select{width:100%;border:2px solid var(--line2,#d0d7e1);border-radius:14px;padding:10px;font:inherit;font-size:16px;background:#fff}
 </style>
 </head>
@@ -185,12 +199,12 @@ async function demoApi(action, b) {
 /* ===== 状態 ===== */
 const S = {
   key: store.get('key', ''), name: store.get('name', ''), role: store.get('role', 'student'), needSet: store.get('needSet', false), me: store.get('me', ''), editing: null, editingN: null, notices: store.get('notices', []), seenN: store.get('seenN', []), reportedN: store.get('reportedN', []),
-  cd: store.get('cd', { members: [], entries: [], replies: [] }), member: null, showAll: false, repDraft: {},
+  cd: store.get('cd', { members: [], entries: [], replies: [] }), reports: store.get('reports', []), seenRep: store.get('seenRep', []), imp: null, member: null, showAll: false, repDraft: {},
   entries: store.get('entries', []), replies: store.get('replies', []),
   outbox: store.get('outbox', []), seen: store.get('seen', []),
   tab: 'today', draft: store.get('draft', null), justSeen: []
 };
-const save = () => { store.set('notices', S.notices); store.set('seenN', S.seenN); store.set('reportedN', S.reportedN); store.set('entries', S.entries); store.set('replies', S.replies); store.set('outbox', S.outbox); store.set('seen', S.seen); };
+const save = () => { store.set('reports', S.reports); store.set('seenRep', S.seenRep); store.set('notices', S.notices); store.set('seenN', S.seenN); store.set('reportedN', S.reportedN); store.set('entries', S.entries); store.set('replies', S.replies); store.set('outbox', S.outbox); store.set('seen', S.seen); };
 
 /* ===== 道具 ===== */
 const $ = s => document.querySelector(s);
@@ -225,16 +239,16 @@ async function flush() {
 }
 function forgetIfBadKey(e) {
   if (e && e.server && /先に自分の合言葉/.test(e.message || '')) { S.needSet = true; store.set('needSet', true); render(); return; }
-  if (e && e.server && /合言葉/.test(e.message || '')) { ['key', 'name', 'role', 'needSet', 'me', 'entries', 'replies', 'outbox', 'seen', 'draft', 'cd', 'notices', 'seenN', 'reportedN'].forEach(k => store.del(k)); location.reload(); }
+  if (e && e.server && /合言葉/.test(e.message || '')) { ['key', 'name', 'role', 'needSet', 'me', 'entries', 'replies', 'outbox', 'seen', 'draft', 'cd', 'notices', 'seenN', 'reportedN', 'reports', 'seenRep'].forEach(k => store.del(k)); location.reload(); }
 }
 async function refresh() {
   if (S.role === 'coach') {
-    try { const j = await api('coachList', { key: S.key }); S.cd = { members: j.members, entries: j.entries, replies: j.replies, notices: j.notices || [], reads: j.reads || [] }; if (j.me) { S.me = j.me; store.set('me', S.me); } store.set('cd', S.cd); return true; } catch (e) { forgetIfBadKey(e); return false; }
+    try { const j = await api('coachList', { key: S.key }); S.cd = { members: j.members, entries: j.entries, replies: j.replies, notices: j.notices || [], reads: j.reads || [], reports: parseReports(j.reports) }; if (j.me) { S.me = j.me; store.set('me', S.me); } store.set('cd', S.cd); return true; } catch (e) { forgetIfBadKey(e); return false; }
   }
   try {
     await flush();
     const j = await api('list', { key: S.key });
-    S.entries = j.entries; S.replies = j.replies; S.notices = j.notices || []; if (j.name) { S.name = j.name; store.set('name', j.name); }
+    S.entries = j.entries; S.replies = j.replies; S.notices = j.notices || []; S.reports = parseReports(j.reports); if (j.name) { S.name = j.name; store.set('name', j.name); }
     save(); return true;
   } catch (e) { forgetIfBadKey(e); return false; }
 }
@@ -245,8 +259,8 @@ function shell(sub, body) {
   $('#app').innerHTML = (DEMO ? '<div class="demo">見本モード（本物には送られません）</div>' : '') +
     `<header><div class="t en">PRACTICE NOTE</div><div class="s">${esc(sub)}</div></header>` +
     (S.key && !S.needSet ? (S.role === 'coach'
-      ? `<nav>${[['new', '新しい記録'], ['members', '部員ごと'], ['notice', 'お知らせ']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'new' && unreplied().length ? `<span class="badge">${unreplied().length}</span>` : ''}</button>`).join('')}</nav>`
-      : `<nav>${[['today', '今日の記録'], ['history', 'これまで'], ['graph', 'グラフ']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'history' && n ? `<span class="badge">返事 ${n}</span>` : ''}${k === 'today' && S.tab !== 'today' && unseenN().length ? `<span class="badge">お知らせ</span>` : ''}</button>`).join('')}</nav>`) : '') +
+      ? `<nav>${[['new', '新しい記録'], ['members', '部員ごと'], ['notice', 'お知らせ'], ['creport', 'レポート']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'new' && unreplied().length ? `<span class="badge">${unreplied().length}</span>` : ''}</button>`).join('')}</nav>`
+      : `<nav>${[['today', '今日の記録'], ['history', 'これまで'], ['graph', 'グラフ'], ['report', 'レポート']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'history' && n ? `<span class="badge">返事 ${n}</span>` : ''}${k === 'report' && unseenRep().length ? '<span class="badge">NEW</span>' : ''}${k === 'today' && S.tab !== 'today' && unseenN().length ? `<span class="badge">お知らせ</span>` : ''}</button>`).join('')}</nav>`) : '') +
     `<main>${body}</main>`;
   document.querySelectorAll('nav button').forEach(b => b.onclick = () => go(b.dataset.tab));
 }
@@ -323,6 +337,7 @@ function renderToday() {
     ${nOld.length ? `<details class="oldn"><summary>前のお知らせ（${nOld.length}件）</summary>${nOld.map(x => nCard(x, false)).join('')}</details>` : ''}` : '';
   shell(`${jdate(today())}　${S.name}`, `
   ${noticeBlock}
+  ${lastMatchCard()}
   ${S.outbox.length ? `<div class="pending">送信待ち ${S.outbox.length}件。ネットにつながったら自動で送ります</div>` : ''}
   ${done ? `<div class="mini">今日はもう${done}回提出しています。もう一度出すと、もう1件追加されます</div>` : ''}
   <div class="seg"><button data-type="practice" class="${M ? '' : 'on'}">練習</button><button data-type="match" class="${M ? 'on' : ''}">試合</button></div>
@@ -343,6 +358,7 @@ function renderToday() {
   document.querySelectorAll('.seg button').forEach(b => b.onclick = () => { saveDraft(); d.type = b.dataset.type; store.set('draft', d); renderToday(); });
   document.querySelectorAll('textarea,input').forEach(el => el.addEventListener('input', () => { el.classList.remove('miss'); saveDraft(); }));
   $('#submit').onclick = submit;
+  const tr = $('#toRep'); if (tr) tr.onclick = () => go('report');
   if (nNew.length) { S.seenN = [...new Set([...S.seenN, ...nNew.map(nkey)])]; save(); }
   reportReads();
 }
@@ -415,7 +431,7 @@ function renderHistory() {
 }
 function bindFoot() {
   const r = $('#reload'); if (r) r.onclick = async () => { toast((await refresh()) ? '最新にしました' : 'ネットにつながっていません'); render(); };
-  const l = $('#logout'); if (l) l.onclick = () => { if (!confirm('この端末から合言葉と記録の控えを消します。もう一度使うときは合言葉を入れ直します。よいですか？')) return; ['key', 'name', 'role', 'needSet', 'me', 'entries', 'replies', 'outbox', 'seen', 'draft', 'cd', 'notices', 'seenN', 'reportedN'].forEach(k => store.del(k)); location.reload(); };
+  const l = $('#logout'); if (l) l.onclick = () => { if (!confirm('この端末から合言葉と記録の控えを消します。もう一度使うときは合言葉を入れ直します。よいですか？')) return; ['key', 'name', 'role', 'needSet', 'me', 'entries', 'replies', 'outbox', 'seen', 'draft', 'cd', 'notices', 'seenN', 'reportedN', 'reports', 'seenRep'].forEach(k => store.del(k)); location.reload(); };
 }
 
 /* ===== 顧問用 ===== */
@@ -497,6 +513,7 @@ function renderNotices() {
 }
 function renderCoach() {
   if (S.tab === 'notice') return renderNotices();
+  if (S.tab === 'creport') return renderCoachReports();
   if (S.tab === 'members') return S.member ? renderMember() : renderMembers();
   const list = cSort(S.showAll ? S.cd.entries : unreplied());
   const body = list.length ? list.map(e => entryHTML(e, { coach: true, open: true, who: memberName(e.uid), replies: cRepliesFor(e.id), tag: cRepliesFor(e.id).length ? '' : '<span class="tag">未返事</span>' })).join('')
@@ -545,12 +562,88 @@ function renderGraph() {
   ${low.length ? `<div class="h"><span class="en">LOW</span><span class="ja">1・2を付けた日</span></div>${low.map(e => `<div class="card" style="margin-bottom:8px"><div class="date">${jdate(e.date)}</div>${fieldsOf(e).filter(([n, , r]) => e[n] <= 2 && e[r]).map(([n, l, r]) => `<div class="kv"><span class="k">${l} ${e[n]}</span>${esc(e[r])}</div>`).join('')}</div>`).join('')}` : ''}`);
 }
 
+/* ===== 試合レポート ===== */
+/* 受け口からは {id, matchId, uid, at, data(文字列)} で来る。data＝レポートのファイルの中の1人分（uid=team はチーム版） */
+function parseReports(list) {
+  return (list || []).map(r => { let d = r.data; if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = null; } } return d ? { id: String(r.id), matchId: String(r.matchId), uid: String(r.uid), at: String(r.at || ''), d } : null; }).filter(Boolean);
+}
+const rkeyRep = r => r.id + '@' + r.at;
+const myReports = () => S.reports.filter(r => r.uid !== 'team').sort((a, b) => (b.d.match.date || '').localeCompare(a.d.match.date || '') || Date.parse(b.at) - Date.parse(a.at));
+const teamReportOf = mid => S.reports.find(r => r.uid === 'team' && r.matchId === mid);
+const unseenRep = () => S.reports.filter(r => !S.seenRep.includes(rkeyRep(r)));
+const pct = x => x == null ? '—' : (Math.round(Math.abs(x) * 100) * (x < 0 ? -1 : 1) < 0 ? '−' : '') + Math.round(Math.abs(x) * 100) + '%';
+const share = (a, b) => b ? Math.round(a / b * 100) + '%' : '—';
+const pdiff = (a, b) => { if (a == null || b == null) return '—'; const v = Math.round(a * 100) - Math.round(b * 100); return (v > 0 ? '+' : v < 0 ? '−' : '±') + Math.abs(v); };
+const sl = (k, v) => `<div class="sline"><b>${k}</b>${v}</div>`;
+function statsHTML(p, notes, prev) {
+  const n = p.stats || {}, T = p.teamStats || {}; const few = (n.att || 0) < 5;
+  const vs = prev ? prev.stats || {} : null;
+  const cmp = (lab, a, b, f) => sl(lab, `${f(a)}　<span class="mini">前回 ${f(b)}${a != null && b != null && f === pct ? `（${pdiff(a, b)}）` : ''}</span>`);
+  return `<div class="h"><span class="en">MATCH STATS</span><span class="ja">この試合の数字</span></div><div class="card">
+    ${sl('スパイク', `決定 ${n.kill}　ミス ${n.serr}`)}${sl('　（第2〜第5セット）', `打数 ${n.att}　決定率 ${pct(n.krate)}　効果率 ${pct(n.keff)}`)}
+    ${sl('サーブ', `本数 ${n.sv}　エース ${n.ace}　ミス ${n.sverr}　効果率 ${pct(n.seff)}`)}
+    ${sl('サーブレシーブ', `ミス ${n.recv}`)}${sl('レシーブ', `上げた ${n.dig}　ミス ${n.derr}`)}${sl('ブロック', `決定 ${n.blk}　タッチ ${n.bt}`)}
+    ${sl('そのほかのミス', `カバー ${n.cov}　トス ${n.toss}　返球 ${n.ret}　その他 ${n.oth}`)}
+    <div class="rnote" style="margin-top:6px">効果率＝（決定−ミス）÷打数、サーブは（エース−ミス）÷本数。${esc((notes || []).join(''))}</div></div>
+  <div class="h"><span class="en">IN THE TEAM</span><span class="ja">チームの中で</span></div><div class="card">
+    <div class="subh">チームに占める割合</div>
+    ${sl('スパイク', `打数 ${share(n.att, T.att)}　決定 ${share(n.k25, T.k25)}　ミス ${share(n.e25, T.e25)}`)}
+    ${sl('サーブ', `本数 ${share(n.sv, T.sv)}　エース ${share(n.ace, T.ace)}　ミス ${share(n.sverr, T.sverr)}`)}
+    ${sl('サーブレシーブ', `ミス ${share(n.recv, T.recv)}`)}${sl('レシーブ', `上げた ${share(n.dig, T.dig)}　ミス ${share(n.derr, T.derr)}`)}
+    <div class="subh">チーム全体との差（ポイント）</div>
+    ${sl('スパイク決定率', `${few ? '—（打数5本未満）' : pdiff(n.krate, T.krate)}（チーム ${pct(T.krate)}）`)}
+    ${sl('スパイク効果率', `${few ? '—（打数5本未満）' : pdiff(n.keff, T.keff)}（チーム ${pct(T.keff)}）`)}
+    ${sl('サーブ効果率', `${pdiff(n.seff, T.seff)}（チーム ${pct(T.seff)}）`)}
+    <div class="subh">前回との比較</div>
+    ${vs ? `<div class="rnote">前回＝${esc(prev.match.title || '')}（${esc(prev.match.date || '')}）</div>` +
+      cmp('スパイク決定率', few ? null : n.krate, (vs.att || 0) < 5 ? null : vs.krate, pct) + cmp('スパイク効果率', few ? null : n.keff, (vs.att || 0) < 5 ? null : vs.keff, pct) +
+      cmp('サーブ効果率', n.seff, vs.seff, pct) + cmp('サーブレシーブのミス', n.recv, vs.recv, x => x == null ? '—' : x + '本') + cmp('レシーブで上げた', n.dig, vs.dig, x => x == null ? '—' : x + '本')
+      : '<div class="rnote">この試合が1回目です。次の試合から並べます。</div>'}</div>`;
+}
+function blocksHTML(sections) {
+  return (sections || []).map(sc => `<div class="h"><span class="en">${esc(sc.en)}</span><span class="ja">${esc(sc.ja)}</span></div><div class="card rep">` +
+    (sc.blocks || []).map(b => b.t === 'sub' ? `<h4>${esc(b.text)}</h4>` : b.t === 'note' ? `<p class="rnote">${esc(b.text)}</p>` :
+      b.t === 'fig' ? `<figure><img alt="図" src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(String(b.svg || ''))}">${b.cap ? `<figcaption>${esc(b.cap)}</figcaption>` : ''}</figure>` :
+      `<p>${esc(b.text)}</p>`).join('') + (sc.en === "COACH'S NOTE" ? '<p class="rnote" style="text-align:right">佐藤</p>' : '') + '</div>').join('');
+}
+/* 1人分のレポート（prev＝同じ人の前の試合のレポート） */
+function playerReportHTML(r, prev, team) {
+  const d = r.d; const p = Object.assign({}, d.player, { teamStats: d.teamStats });
+  return `<div class="mini">${esc(jdate(d.match.date))}</div>
+    ${statsHTML(p, d.notes, prev ? Object.assign({ match: prev.d.match }, { stats: prev.d.player.stats }) : null)}
+    ${blocksHTML(p.sections)}
+    ${team ? `<details class="mrep" style="margin-top:16px"><summary><div class="h"><span class="en">TEAM REPORT</span><span class="ja">チームのレポート（タップで開く）</span></div></summary>${blocksHTML(team.d.sections)}</details>` : ''}`;
+}
+function prevOf(r, list) { const i = list.indexOf(r); return list.slice(i + 1).find(x => x.uid === r.uid) || null; }
+function lastMatchCard() {
+  const r = myReports()[0]; if (!r) return '';
+  const n = r.d.player.stats || {}; const sm = r.d.player.summary || {}; const few = (n.att || 0) < 5;
+  return `<div class="lastm"><div class="date"><span>LAST MATCH　<span class="mini">${esc(r.d.match.title)}（${esc(jdate(r.d.match.date))}）</span></span></div>
+    <div style="margin:6px 0">${sl('スパイク', `決定 ${n.kill}・ミス ${n.serr}${few ? '' : `（第2〜第5セットの効果率 ${pct(n.keff)}）`}`)}${sl('サーブ', `${n.sv}本・エース ${n.ace}・ミス ${n.sverr}`)}${sl('サーブレシーブ', `ミス ${n.recv}`)}</div>
+    <div class="kv"><span class="k">FOCUS　伸ばしてほしいところ</span>${esc(sm.focus)}</div>
+    <div class="kv"><span class="k">NEXT WEEK　次の1週間で意識すること</span>${esc(sm.next)}</div>
+    <button class="toggle" id="toRep">レポートを全部見る</button></div>`;
+}
+function renderReports() {
+  const list = myReports(); const fresh = unseenRep().map(rkeyRep);
+  const body = list.length ? list.map((r, i) => {
+    const inner = playerReportHTML(r, prevOf(r, list), teamReportOf(r.matchId));
+    const tag = fresh.includes(rkeyRep(r)) ? '<span class="tag">NEW</span>' : '';
+    return i === 0 ? `<div class="date" style="margin:4px 0"><span class="en" style="color:var(--ink2)">${esc(r.d.match.title)}</span>${tag}</div>${inner}`
+      : `<details class="mrep"><summary><div class="card"><div class="date"><span>${esc(r.d.match.title)}　<span class="mini">${esc(jdate(r.d.match.date))}</span></span>${tag}</div></div></summary>${inner}</details>`;
+  }).join('<hr style="border:0;border-top:1px dashed var(--line);margin:22px 0">') : '<p class="mini center" style="margin-top:40px">まだレポートはありません。試合のあとに佐藤から届きます</p>';
+  shell(S.name, body + '<div class="foot"><button class="link" id="reload">最新にする</button></div>');
+  bindFoot();
+  S.seenRep = [...new Set([...S.seenRep, ...S.reports.map(rkeyRep)])]; save();
+}
+
 function render() {
   if (!S.key) return renderLogin();
   if (S.needSet) return renderSetKey();
   if (S.role === 'coach') return renderCoach();
   if (S.tab === 'history') return renderHistory();
   if (S.tab === 'graph') return renderGraph();
+  if (S.tab === 'report') return renderReports();
   return renderToday();
 }
 
