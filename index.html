@@ -181,10 +181,10 @@ async function demoApi(action, b) {
   if (action === 'list' && !isCoach) {
     const mine = db.entries.filter(x => x.uid === user.id).map(({ uid, ...x }) => x);
     const ids = new Set(mine.map(x => x.id));
-    return { ok: true, name: user.name, entries: mine, replies: db.replies.filter(r => ids.has(r.entryId)) };
+    return { ok: true, name: user.name, entries: mine, replies: db.replies.filter(r => ids.has(r.entryId)), reports: (db.reports || []).filter(r => r.uid === user.id || r.uid === 'team') };
   }
   if (action === 'coachList' && isCoach) {
-    return { ok: true, name: user.name, members: Object.values(db.users).filter(u => u.role !== 'coach').map(u => ({ id: u.id, name: u.name })), entries: db.entries, replies: db.replies };
+    return { ok: true, name: user.name, members: Object.values(db.users).filter(u => u.role !== 'coach').map(u => ({ id: u.id, name: u.name })), entries: db.entries, replies: db.replies, reports: db.reports || [] };
   }
   if (action === 'reply' && isCoach) {
     if (!db.entries.some(x => x.id === b.entryId)) { const e = new Error('記録が見つかりません'); e.server = true; throw e; }
@@ -193,6 +193,8 @@ async function demoApi(action, b) {
   }
   if (action === 'editReply' && isCoach) { const r = db.replies.find(x => x.id === b.replyId); if (!r) throw Object.assign(new Error('返事が見つかりません'), { server: true }); r.text = b.text; r.edited = new Date().toISOString(); store.set('demo_db2', db); return { ok: true, reply: r }; }
   if (action === 'deleteReply' && isCoach) { db.replies = db.replies.filter(x => x.id !== b.replyId); store.set('demo_db2', db); return { ok: true }; }
+  if (action === 'addReports' && isCoach) { db.reports = (db.reports || []).filter(r => r.matchId !== b.matchId); const now = new Date().toISOString(); const add = b.items.map((it, i) => ({ id: 'p' + Date.now().toString(36) + i, matchId: b.matchId, uid: it.uid, at: now, data: it.data })); db.reports.push(...add); store.set('demo_db2', db); return { ok: true, reports: add }; }
+  if (action === 'deleteReports' && isCoach) { db.reports = (db.reports || []).filter(r => r.matchId !== b.matchId); store.set('demo_db2', db); return { ok: true }; }
   const e = new Error('できない操作です'); e.server = true; throw e;
 }
 
@@ -635,6 +637,74 @@ function renderReports() {
   shell(S.name, body + '<div class="foot"><button class="link" id="reload">最新にする</button></div>');
   bindFoot();
   S.seenRep = [...new Set([...S.seenRep, ...S.reports.map(rkeyRep)])]; save();
+}
+
+/* ---- 顧問：レポートを読み込んで送る ---- */
+const normName = x => String(x || '').replace(/[\s　]/g, '');
+function guessUid(name) {
+  const n = normName(name); const mem = S.cd.members || [];
+  const hit = mem.filter(m => { const k = normName(m.name); return k && (n.includes(k) || k.includes(n)); });
+  return hit.length === 1 ? hit[0].id : '';
+}
+function itemsOf(rep, map) {
+  const base = { match: rep.match, notes: rep.notes || [] };
+  const items = rep.players.map((p, i) => map[i] ? { uid: map[i], data: JSON.stringify(Object.assign({}, base, { teamStats: rep.team.stats, player: p })) } : null).filter(Boolean);
+  if (rep.team) items.push({ uid: 'team', data: JSON.stringify(Object.assign({}, base, { sections: rep.team.sections, stats: rep.team.stats })) });
+  return items;
+}
+function renderCoachReports() {
+  const mem = S.cd.members || []; const reps = S.cd.reports || [];
+  const byMatch = {}; reps.forEach(r => { (byMatch[r.matchId] = byMatch[r.matchId] || []).push(r); });
+  const sent = Object.values(byMatch).sort((a, b) => (b[0].d.match.date || '').localeCompare(a[0].d.match.date || ''));
+  const I = S.imp;
+  const impHTML = !I ? `<div class="card"><div class="h" style="margin-top:0"><span class="en">IMPORT</span><span class="ja">レポートを読み込む</span></div>
+      <div class="hint">フジ子が作ったレポートのファイル（.json）を選ぶ。送る前に中身を確かめられます</div>
+      <input type="file" id="rfile" accept=".json,application/json"></div>`
+    : `<div class="card"><div class="h" style="margin-top:0"><span class="en">CHECK</span><span class="ja">送る前に確かめる</span></div>
+      <div class="date"><span>${esc(I.rep.match.title)}　<span class="mini">${esc(jdate(I.rep.match.date))}</span></span></div>
+      ${byMatch[I.rep.match.id] ? '<div class="err">この試合のレポートはもう送っています。送ると前のものと入れ替わります</div>' : ''}
+      <div class="hint" style="margin-top:8px">だれに送るか（自動で合わせています。違っていたら選び直す）</div>
+      ${I.rep.players.map((p, i) => `<div class="mapr"><span>${esc(p.name)}</span><select data-i="${i}" class="rmap"><option value="">送らない</option>${mem.map(m => `<option value="${m.id}" ${I.map[i] === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select><button class="mini-btn rview" data-i="${i}">見る</button></div>`).join('')}
+      ${I.rep.team ? '<div class="mini" style="margin-top:6px">チーム版は全員に届きます</div>' : ''}
+      <button class="btn" id="rsend" style="padding:12px">送る</button><button class="btn ghost" id="rcancel" style="margin-top:8px;padding:10px">やめる</button></div>
+      ${I.view != null ? `<div class="h"><span class="en">PREVIEW</span><span class="ja">${esc(I.rep.players[I.view].name)}の画面</span></div>` +
+        playerReportHTML({ d: { match: I.rep.match, notes: I.rep.notes, teamStats: I.rep.team.stats, player: I.rep.players[I.view] } }, null, null) : ''}`;
+  const sentHTML = sent.map(list => {
+    const m = list[0].d.match; const who = list.filter(r => r.uid !== 'team').map(r => (mem.find(x => x.id === r.uid) || {}).name || '？');
+    return `<div class="card"><div class="date"><span>${esc(m.title)}　<span class="mini">${esc(jdate(m.date))}</span></span></div>
+      <div class="mini">送った相手：${who.map(esc).join('・') || 'なし'}${list.some(r => r.uid === 'team') ? '＋チーム版（全員）' : ''}</div>
+      <div class="rbtns"><button class="mini-btn del rdel" data-mid="${esc(list[0].matchId)}">この試合のレポートを消す</button></div></div>`;
+  }).join('');
+  shell('顧問用　' + S.name, `${impHTML}<div class="h"><span class="en">SENT</span><span class="ja">送ったレポート</span></div><div class="list">${sentHTML || '<p class="mini center">まだ送っていません</p>'}</div>
+    <div class="foot"><button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);
+  const f = $('#rfile'); if (f) f.onchange = async () => {
+    const file = f.files[0]; if (!file) return;
+    try { const rep = JSON.parse(await file.text());
+      if (rep.kind !== 'pn-report' || !rep.match || !Array.isArray(rep.players)) throw new Error('形');
+      S.imp = { rep, map: rep.players.map(p => guessUid(p.name)), view: null }; render(); }
+    catch (e) { toast('レポートのファイルではないようです'); }
+  };
+  document.querySelectorAll('.rmap').forEach(sel => sel.onchange = () => { S.imp.map[Number(sel.dataset.i)] = sel.value; });
+  document.querySelectorAll('.rview').forEach(b => b.onclick = () => { S.imp.view = Number(b.dataset.i); render(); });
+  const c = $('#rcancel'); if (c) c.onclick = () => { S.imp = null; render(); };
+  const sbtn = $('#rsend'); if (sbtn) sbtn.onclick = async () => {
+    const I = S.imp; const used = I.map.filter(Boolean);
+    if (new Set(used).size !== used.length) { toast('同じ部員が2回選ばれています'); return; }
+    if (!used.length) { toast('送る相手がいません'); return; }
+    const skip = I.rep.players.filter((p, i) => !I.map[i]).map(p => p.name);
+    if (!confirm(`${used.length}人に送ります${I.rep.team ? '（チーム版は全員）' : ''}。${skip.length ? `\n送らない：${skip.join('・')}` : ''}\nよいですか？`)) return;
+    sbtn.disabled = true;
+    try { const j = await api('addReports', { key: S.key, matchId: I.rep.match.id, items: itemsOf(I.rep, I.map) });
+      S.cd.reports = [...(S.cd.reports || []).filter(r => r.matchId !== I.rep.match.id), ...parseReports(j.reports)]; store.set('cd', S.cd); S.imp = null; toast('送りました'); render(); }
+    catch (e) { sbtn.disabled = false; toast(e.server ? e.message : 'ネットにつながっていません。つながってからもう一度'); }
+  };
+  document.querySelectorAll('.rdel').forEach(b => b.onclick = async () => {
+    if (!confirm('この試合のレポートを消します。部員の画面からも消えます。よいですか？')) return;
+    b.disabled = true; const mid = b.dataset.mid;
+    try { await api('deleteReports', { key: S.key, matchId: mid }); S.cd.reports = (S.cd.reports || []).filter(r => r.matchId !== mid); store.set('cd', S.cd); toast('消しました'); render(); }
+    catch (e) { b.disabled = false; toast(e.server ? e.message : 'ネットにつながっていません'); }
+  });
+  bindFoot(); if (I && I.view != null) { const h = document.querySelectorAll('.h'); const last = [...h].find(x => x.textContent.includes('PREVIEW')); if (last) last.scrollIntoView(); }
 }
 
 function render() {
