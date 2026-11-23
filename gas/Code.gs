@@ -12,9 +12,11 @@ const COLS = {
             'good', 'bad', 'heard', 'mgood', 'mbad', 'tgood', 'tbad', 'mprac', 'tocoach', 'next', 'at', 'received'],
   replies: ['id', 'entryId', 'text', 'at', 'by', 'byId', 'edited'],
   notices: ['id', 'to', 'text', 'at', 'by', 'byId', 'edited', 'targets'],
-  reads: ['noticeId', 'uid', 'at']
+  reads: ['noticeId', 'uid', 'at'],
+  reports: ['id', 'matchId', 'uid', 'at', 'by', 'j1', 'j2', 'j3', 'j4', 'j5', 'j6', 'j7', 'j8']
 };
-const SHEET = { members: '部員', entries: '記録', replies: '返事', notices: 'お知らせ', reads: '既読' };
+const SHEET = { members: '部員', entries: '記録', replies: '返事', notices: 'お知らせ', reads: '既読', reports: 'レポート' };
+const CHUNK = 40000;  // 1マスに入れる文字数（表の1マスは5万文字まで）
 
 function setupPracticeNote() {
   const props = PropertiesService.getScriptProperties();
@@ -95,7 +97,8 @@ function handle_(b) {
     const ids = new Set(entries.map(x => x.id));
     const replies = readAll_(book.getSheetByName(SHEET.replies)).filter(r => ids.has(r.entryId)).map(cleanR_);
     const notices = readAll_(book.getSheetByName(SHEET.notices)).filter(n => forUser_(n, user)).map(cleanN_);
-    return { ok: true, name: user.name, entries, replies, notices };
+    const reports = reportsOf_(book).filter(r => r.uid === user.id || r.uid === 'team');
+    return { ok: true, name: user.name, entries, replies, notices, reports };
   }
   if (a === 'coachList' && coach) {
     const members = readAll_(book.getSheetByName(SHEET.members)).filter(r => r['役割'] !== 'coach' && r['名前']).map(r => ({ id: String(r.id), name: String(r['名前']), grade: gradeOf_(r['学年']) }));
@@ -103,7 +106,7 @@ function handle_(b) {
     const replies = readAll_(book.getSheetByName(SHEET.replies)).map(cleanR_);
     const notices = readAll_(book.getSheetByName(SHEET.notices)).map(cleanN_);
     const reads = readAll_(book.getSheetByName(SHEET.reads)).map(r => ({ noticeId: String(r.noticeId), uid: String(r.uid) }));
-    return { ok: true, name: user.name, me: user.id, members, entries, replies, notices, reads };
+    return { ok: true, name: user.name, me: user.id, members, entries, replies, notices, reads, reports: reportsOf_(book) };
   }
   if (a === 'reply' && coach) {
     const text = String(b.text || '').trim();
@@ -175,7 +178,44 @@ function handle_(b) {
       return { ok: false, error: 'お知らせが見つかりません' };
     });
   }
+  if (a === 'addReports' && coach) {
+    const mid = String(b.matchId || ''); const items = Array.isArray(b.items) ? b.items : [];
+    if (!mid || !items.length) return { ok: false, error: 'レポートの形がちがいます' };
+    const ids = new Set(readAll_(book.getSheetByName(SHEET.members)).filter(m => m['役割'] !== 'coach' && m['名前']).map(m => String(m.id)));
+    for (const it of items) {
+      if (!(it.uid === 'team' || ids.has(String(it.uid)))) return { ok: false, error: '送る相手がちがいます' };
+      const d = String(it.data || ''); if (d.charAt(0) !== '{' || d.length > CHUNK * 8) return { ok: false, error: 'レポートが大きすぎるか、形がちがいます' };
+    }
+    return withLock_(() => {
+      deleteReportRows_(book, mid);
+      const sh = book.getSheetByName(SHEET.reports); const now = new Date().toISOString(); const out = [];
+      items.forEach(it => {
+        const d = String(it.data); const parts = [];
+        for (let i = 0; i < 8; i++) { const c = d.slice(i * CHUNK, (i + 1) * CHUNK); parts.push(c ? '~' + c : ''); }
+        const r = { id: 'p' + Utilities.getUuid().slice(0, 8), matchId: mid, uid: String(it.uid), at: now, by: user.name };
+        sh.appendRow([r.id, r.matchId, r.uid, r.at, r.by].concat(parts));
+        out.push(Object.assign(r, { data: d }));
+      });
+      return { ok: true, reports: out };
+    });
+  }
+  if (a === 'deleteReports' && coach) {
+    const mid = String(b.matchId || ''); if (!mid) return { ok: false, error: '試合がちがいます' };
+    return withLock_(() => { deleteReportRows_(book, mid); return { ok: true }; });
+  }
   return { ok: false, error: 'できない操作です' };
+}
+
+/* ---- 試合レポート（1人分のデータを、j1〜j8の8マスに分けて入れる。先頭の ~ は式にさせないための印） ---- */
+function reportsOf_(book) {
+  return readAll_(book.getSheetByName(SHEET.reports)).map(r => ({
+    id: String(r.id), matchId: String(r.matchId), uid: String(r.uid), at: String(r.at), by: String(r.by || ''),
+    data: ['j1', 'j2', 'j3', 'j4', 'j5', 'j6', 'j7', 'j8'].map(k => String(r[k] == null ? '' : r[k]).replace(/^~/, '')).join('')
+  }));
+}
+function deleteReportRows_(book, mid) {
+  const sh = book.getSheetByName(SHEET.reports); const v = sh.getDataRange().getValues(); const ci = v[0].indexOf('matchId');
+  for (let i = v.length - 1; i >= 1; i--) if (String(v[i][ci]) === mid) sh.deleteRow(i + 1);
 }
 
 /** 列が足りない古い表に、見出しを足す（初回の列を足すときは、合言葉の入っている全員を「はじめ」にする） */
