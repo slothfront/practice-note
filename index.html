@@ -309,7 +309,7 @@ function go(tab) { saveDraft(); S.tab = tab; S.member = null; S.cview = null; if
 function renderLogin(err) {
   shell('君商 女子バレー部', `<div class="login"><div class="big en">PRACTICE NOTE</div>
   <p class="mini center">練習のあと、その日のうちに書こう</p>
-  <div class="card" style="margin-top:28px"><div class="h" style="margin-top:0"><span class="en">PASSWORD</span><span class="ja">合言葉</span></div>
+  <div class="h" style="margin-top:28px"><span class="en">PASSWORD</span><span class="ja">合言葉</span></div><div class="card">
   <div class="hint">佐藤からもらった合言葉を入れる。最初の1回だけ${DEMO ? '（見本は 部員＝demo・顧問＝coach）' : ''}</div>
   <input id="pw" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text">
   ${err ? `<div class="err">${esc(err)}</div>` : ''}</div>
@@ -324,7 +324,7 @@ function renderLogin(err) {
 
 function renderSetKey(err) {
   shell(S.name ? S.name + 'さん' : '', `<div class="login"><div class="big en">PRACTICE NOTE</div>
-  <div class="card" style="margin-top:24px"><div class="h" style="margin-top:0"><span class="en">NEW PASSWORD</span><span class="ja">自分の合言葉を決める</span></div>
+  <div class="h" style="margin-top:24px"><span class="en">NEW PASSWORD</span><span class="ja">自分の合言葉を決める</span></div><div class="card">
   <div class="hint">これから使う合言葉を決めてください。4〜30文字、空白なし。ほかの人に教えない。忘れたら佐藤に言えば決め直せます</div>
   <div class="q">合言葉</div><input id="nk1" autocomplete="off" autocapitalize="off" spellcheck="false">
   <div class="q">もう一度</div><input id="nk2" autocomplete="off" autocapitalize="off" spellcheck="false">
@@ -551,11 +551,11 @@ function renderNotices() {
       ${body}
       <details class="who"><summary>だれが読んだか</summary><div class="mini">読んだ：${rd.map(m => esc(m.name)).join('・') || 'まだいない'}</div><div class="mini">まだ：${targets.filter(m => !rd.includes(m)).map(m => esc(m.name)).join('・') || 'いない'}</div></details></div>`;
   };
-  shell('顧問用　' + S.name, `<div class="card"><div class="h" style="margin-top:0"><span class="en">NOTICE</span><span class="ja">お知らせを送る</span></div>
+  shell('顧問用　' + S.name, `<div class="h" style="margin-top:4px"><span class="en">NOTICE</span><span class="ja">お知らせを送る</span></div><div class="card">
     <div class="q">宛先</div><select id="nto"><option value="all">全員（${mem.length}人）</option>${grades.map(g => `<option value="grade:${g}">${g}年（${mem.filter(m => m.grade === g).length}人）</option>`).join('')}<optgroup label="1人に送る">${mem.map(m => `<option value="${m.id}">${esc(m.name)}${m.grade ? `（${m.grade}年）` : ''}</option>`).join('')}</optgroup></select>${mem.some(m => !m.grade) ? '<div class="mini" style="margin-top:4px">学年が入っていない部員がいます（表の「部員」シートF列）</div>' : ''}
     <div class="q">お知らせ</div><textarea id="ntext">${esc(S.nDraft || '')}</textarea>
     <button class="btn" id="nsend" style="margin-top:10px;padding:12px">送る</button>
-    <div class="mini" style="margin-top:6px">部員が次にアプリを開くと、「今日の記録」の一番上に出ます</div></div>
+    <div class="mini" style="margin-top:6px">部員のアプリの「お知らせ」タブに出ます。部員が「見ました」を押すと既読になります</div></div>
     <div class="h"><span class="en">SENT</span><span class="ja">送ったお知らせ</span></div>
     <div class="list">${all.map(card).join('') || '<p class="mini center">まだ送っていません</p>'}</div>
     <div class="foot"><button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);
@@ -735,10 +735,10 @@ function renderCoachReports() {
   const byMatch = {}; reps.forEach(r => { (byMatch[r.matchId] = byMatch[r.matchId] || []).push(r); });
   const sent = Object.values(byMatch).sort((a, b) => (b[0].d.match.date || '').localeCompare(a[0].d.match.date || ''));
   const I = S.imp;
-  const impHTML = !I ? `<div class="card"><div class="h" style="margin-top:0"><span class="en">IMPORT</span><span class="ja">レポートを読み込む</span></div>
+  const impHTML = !I ? `<div class="h" style="margin-top:4px"><span class="en">IMPORT</span><span class="ja">レポートを読み込む</span></div><div class="card">
       <div class="hint">フジ子が作ったレポートのファイル（.json）を選ぶ。送る前に中身を確かめられます</div>
       <input type="file" id="rfile" accept=".json,application/json"></div>`
-    : `<div class="card"><div class="h" style="margin-top:0"><span class="en">CHECK</span><span class="ja">送る前に確かめる</span></div>
+    : `<div class="h" style="margin-top:4px"><span class="en">CHECK</span><span class="ja">送る前に確かめる</span></div><div class="card">
       <div class="date"><span>${esc(I.rep.match.title)}　<span class="mini">${esc(jdate(I.rep.match.date))}</span></span></div>
       ${byMatch[I.rep.match.id] ? '<div class="err">この試合のレポートはもう送っています。送ると前のものと入れ替わります</div>' : ''}
       <div class="hint" style="margin-top:8px">だれに送るか（自動で合わせています。違っていたら選び直す）</div>
@@ -861,7 +861,7 @@ function renderCoachJump() {
   const reach = uid => { const p = T.people.find(x => x.uid === uid); return p && p.reach ? p.reach : ''; };
   const d = S.jDate || today();
   const have = uid => J.find(j => j.uid === uid && j.date === d);
-  const form = `<details class="card mrep" id="jform" ${S.jOpen ? 'open' : ''}><summary><div class="h" style="margin:0"><span class="en">MEASURE</span><span class="ja">測定を入れる（${S.jOpen ? 'タップでしまう' : 'タップで開く'}）</span></div></summary>
+  const form = `<details class="mrep" id="jform" ${S.jOpen ? 'open' : ''}><summary><div class="h" style="margin-top:4px"><span class="en">MEASURE</span><span class="ja">測定を入れる（${S.jOpen ? 'タップでしまう' : 'タップで開く'}）</span></div></summary><div class="card">
     <div class="q">測定日</div><input type="date" id="jdate" value="${d}">
     <div class="hint" style="margin-top:8px">触った高さ（cm）。試技が何回かあれば、空白で区切って全部入れる（いちばん高いものを使います）。空の人は記録しません</div>
     ${mem.map(m => { const h = have(m.id) || {}; return `<div class="card" style="margin:8px 0;padding:8px 10px;box-shadow:none;border:2px solid var(--line2)"><div class="date"><span>${esc(m.name)}</span>${h.id ? '<span class="tag wait">この日は入力済み</span>' : ''}</div>
@@ -869,7 +869,7 @@ function renderCoachJump() {
       <div class="mapr"><span>助走</span><input class="jin" data-u="${m.id}" data-k="run" inputmode="decimal" placeholder="例 258 261" value="${esc(h.run || '')}"></div>
       <div class="mapr"><span>指高</span><input class="jin" data-u="${m.id}" data-k="reach" inputmode="decimal" placeholder="${reach(m.id) ? '前回 ' + reach(m.id) + '（測ったときだけ）' : '測ったときだけ'}" value="${esc(h.reach || '')}"></div></div>`; }).join('')}
     <button class="btn" id="jsave" style="padding:12px">保存する</button>
-    <details class="who" style="margin-top:10px"><summary>まとめて読み込む（ファイル）</summary><input type="file" id="jfile" accept=".json,application/json"></details></details>`;
+    <details class="who" style="margin-top:10px"><summary>まとめて読み込む（ファイル）</summary><input type="file" id="jfile" accept=".json,application/json"></details></div></details>`;
   const byDate = T.dates.slice().reverse().map(dt => { const u = {}; J.filter(j => j.date === dt && !/^ref:/.test(j.uid)).forEach(j => { u[j.uid] = j; }); const rows = Object.values(u);
     return `<div class="card"><div class="date"><span>${esc(jdate(dt))}</span><span class="mini">${rows.length}人</span></div>${rows.map(j => `<div class="sline"><b>${esc(j.name)}</b>その場 ${esc(j.stand || '—')}　助走 ${esc(j.run || '—')}${j.reach ? `　指高 ${esc(j.reach)}` : ''}</div>`).join('')}
       <div class="rbtns"><button class="mini-btn" data-jedit="${dt}">この日を直す</button><button class="mini-btn del" data-jdel="${dt}">この日を消す</button></div></div>`; }).join('');
