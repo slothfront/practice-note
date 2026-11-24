@@ -710,8 +710,7 @@ function renderReports() {
   const body = list.length ? list.map((r, i) => {
     const inner = playerReportHTML(r, prevOf(r, list), teamReportOf(r.matchId));
     const tag = fresh.includes(rkeyRep(r)) ? '<span class="tag">NEW</span>' : '';
-    return i === 0 ? `<div class="date" style="margin:4px 0"><span class="en" style="color:var(--ink2)">${esc(r.d.match.title)}</span>${tag}</div>${inner}`
-      : `<details class="mrep"><summary><div class="card"><div class="date"><span>${esc(r.d.match.title)}　<span class="mini">${esc(jdate(r.d.match.date))}</span></span>${tag}</div></div></summary>${inner}</details>`;
+    return `<details class="mrep" ${i === 0 ? 'open' : ''}><summary><div class="card"><div class="date"><span>${esc(r.d.match.title)}　<span class="mini">${esc(jdate(r.d.match.date))}</span></span>${tag}</div><div class="mini" style="margin-top:2px">タップで開く／たたむ</div></div></summary>${inner}</details>`;
   }).join('<hr style="border:0;border-top:1px dashed var(--line);margin:22px 0">') : '<p class="mini center" style="margin-top:40px">まだレポートはありません。試合のあとに佐藤から届きます</p>';
   shell(S.name, body + '<div class="foot"><button class="link" id="reload">最新にする</button></div>');
   bindFoot();
