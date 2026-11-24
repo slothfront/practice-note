@@ -102,6 +102,10 @@ textarea:focus,input:focus{outline:0;border-color:var(--main)}
 .notice.fresh{border-left-color:var(--acc2,#FFC000)}
 .ntext{white-space:pre-wrap;font-size:14px;line-height:1.6;margin-top:4px}
 details.oldn,details.who{margin:4px 0 8px}details.oldn summary,details.who summary{font-size:12px;color:var(--main,#1F4E79);cursor:pointer;padding:4px 0}
+/* 顧問の画面はパープル */
+body.coach{--main:#5B4B9A;--soft:#EEEAF7;--line2:#DDD6EE;--bg:#F6F4FB;--btn:#5B4B9A;--btnshadow:#43376F;background:var(--bg)}
+.vbar{background:var(--acc2,#FFE27A);color:#1a1a1a;font-size:13px;font-weight:700;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:6}
+.vbar button{border:2px solid #5B4B9A;background:#5B4B9A;color:#fff;border-radius:999px;padding:5px 12px;font:inherit;font-size:12px;font-weight:700;white-space:nowrap}
 /* これまで：気づき・検索・☆ */
 .hctl{background:#fff;border-radius:16px;padding:8px 10px;margin-bottom:12px;box-shadow:0 2px 8px rgba(30,60,100,.07)}
 .hctl .seg{margin:0 0 8px;box-shadow:none;background:var(--soft,#eef)}
@@ -137,10 +141,12 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbxONTyT55jOqV12OJ_zWSkl
 const DEMO = !GAS_URL;
 
 /* ===== 保存（使えない端末でも落ちない） ===== */
+/* 顧問が「部員の画面で見る」をしている間は、端末に何も書かない */
+const viewing = () => typeof S !== 'undefined' && !!S.viewAs;
 const store = {
   get(k, d) { try { const v = localStorage.getItem('pn_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
-  set(k, v) { try { localStorage.setItem('pn_' + k, JSON.stringify(v)); } catch (e) {} },
-  del(k) { try { localStorage.removeItem('pn_' + k); } catch (e) {} }
+  set(k, v) { if (viewing()) return; try { localStorage.setItem('pn_' + k, JSON.stringify(v)); } catch (e) {} },
+  del(k) { if (viewing()) return; try { localStorage.removeItem('pn_' + k); } catch (e) {} }
 };
 
 /* ===== 通信 ===== */
@@ -234,6 +240,7 @@ const repliesFor = id => S.replies.filter(r => r.entryId === id).sort((a, b) => 
 const nkey = n => n.edited ? `${n.id}@${n.edited}` : n.id;
 const unseenN = () => S.notices.filter(n => !S.seenN.includes(nkey(n)));
 async function reportReads() {
+  if (S.viewAs) return;
   const ids = S.notices.map(n => n.id).filter(id => !S.reportedN.includes(id));
   if (!ids.length) return;
   try { await api('readNotices', { key: S.key, ids }); S.reportedN = [...new Set([...S.reportedN, ...ids])]; save(); } catch (e) {}
@@ -256,6 +263,7 @@ function forgetIfBadKey(e) {
   if (e && e.server && /合言葉/.test(e.message || '')) { clearLocal(); location.reload(); }
 }
 async function refresh() {
+  if (S.viewAs) return true;
   if (S.role === 'coach') {
     try { const j = await api('coachList', { key: S.key }); S.cd = { members: j.members, entries: j.entries, replies: j.replies, notices: j.notices || [], reads: j.reads || [], reports: parseReports(j.reports), jumps: j.jumps || [] }; if (j.me) { S.me = j.me; store.set('me', S.me); } store.set('cd', S.cd); return true; } catch (e) { forgetIfBadKey(e); return false; }
   }
@@ -270,20 +278,25 @@ async function refresh() {
 /* ===== 画面 ===== */
 function shell(sub, body) {
   const n = S.role === 'coach' ? 0 : unseen().length;
+  const C = S.role === 'coach' && !!S.key && !S.needSet; document.body.classList.toggle('coach', C);
+  const tc = document.querySelector('meta[name=theme-color]'); if (tc) tc.setAttribute('content', C ? '#5B4B9A' : '#22B3A6');
   $('#app').innerHTML = (DEMO ? '<div class="demo">見本モード（本物には送られません）</div>' : '') +
+    (S.viewAs ? `<div class="vbar"><span>${esc(S.name)}の画面（見るだけ）</span><button id="vexit">顧問の画面にもどる</button></div>` : '') +
     `<header><div class="t en">PRACTICE NOTE</div><div class="s">${esc(sub)}</div></header>` +
     (S.key && !S.needSet ? (S.role === 'coach'
       ? `<nav>${[['new', '新しい記録'], ['members', '部員ごと'], ['notice', 'お知らせ'], ['creport', 'レポート'], ['cjump', 'ジャンプ']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'new' && unreplied().length ? `<span class="badge">${unreplied().length}</span>` : ''}</button>`).join('')}</nav>`
       : `<nav>${[['today', '今日の記録'], ['history', 'これまで'], ['graph', 'グラフ'], ['report', 'レポート']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'history' && n ? `<span class="badge">返事 ${n}</span>` : ''}${k === 'report' && unseenRep().length ? '<span class="badge">NEW</span>' : ''}${k === 'today' && S.tab !== 'today' && unseenN().length ? `<span class="badge">お知らせ</span>` : ''}</button>`).join('')}</nav>`) : '') +
     `<main>${body}</main>`;
   document.querySelectorAll('nav button').forEach(b => b.onclick = () => go(b.dataset.tab));
+  const vx = $('#vexit'); if (vx) vx.onclick = () => { exitView(); pushNav(); render(); window.scrollTo(0, 0); };
 }
 /* ---- スマホの戻るボタン：画面を切り替えるたびに履歴を1つ積み、戻るで前の画面にもどす ---- */
-const navState = () => ({ pn: 1, tab: S.tab, member: S.member || null, cview: S.cview || null, pview: S.imp && S.imp.view != null ? S.imp.view : null });
+const navState = () => ({ pn: 1, viewAs: S.viewAs || null, tab: S.tab, member: S.member || null, cview: S.cview || null, pview: S.imp && S.imp.view != null ? S.imp.view : null });
 function pushNav() { try { history.pushState(navState(), ''); } catch (e) {} }
 window.addEventListener('popstate', ev => {
   const st = ev.state; if (!st || !st.pn || !S.key) return;
-  saveDraft(); S.tab = st.tab; S.member = st.member; S.cview = st.cview; if (S.imp) S.imp.view = st.pview;
+  saveDraft(); if ((st.viewAs || null) !== (S.viewAs || null)) { if (S.viewAs) exitView(); if (st.viewAs) enterView(st.viewAs); }
+  S.tab = st.tab; S.member = st.member; S.cview = st.cview; if (S.imp) S.imp.view = st.pview;
   render(); window.scrollTo(0, 0);
 });
 function go(tab) { saveDraft(); S.tab = tab; S.member = null; S.cview = null; if (S.imp) S.imp.view = null; pushNav(); render(); window.scrollTo(0, 0); }
@@ -376,7 +389,7 @@ function renderToday() {
   <textarea id="next" placeholder="次にやること">${esc(d.next)}</textarea>
   ${M ? `<div class="h"><span class="en">TO COACH</span><span class="ja">顧問に伝えたいこと</span></div><div class="hint">あれば</div>
   <textarea id="tocoach">${esc(d.tocoach)}</textarea>` : ''}
-  <button class="btn" id="submit">提出</button>
+  <button class="btn" id="submit" ${S.viewAs ? 'disabled' : ''}>${S.viewAs ? '提出（見るだけの画面では押せません）' : '提出'}</button>
   <p class="mini center">電波が無いときは、つながったときに自動で送ります</p>`);
   document.querySelectorAll('.dot').forEach(b => b.onclick = () => { saveDraft(); d[b.dataset.n] = Number(b.dataset.v); store.set('draft', d); renderToday(); });
   document.querySelectorAll('.seg button').forEach(b => b.onclick = () => { saveDraft(); d.type = b.dataset.type; store.set('draft', d); renderToday(); });
@@ -387,6 +400,7 @@ function renderToday() {
   reportReads();
 }
 async function submit() {
+  if (S.viewAs) { toast('見るだけの画面です。提出はできません'); return; }
   saveDraft(); const d = S.draft; const miss = []; const M = d.type === 'match';
   document.querySelectorAll('.miss').forEach(x => x.classList.remove('miss'));
   if (!d.focus.trim()) miss.push('#focus');
@@ -468,7 +482,7 @@ function historyList() {
 function bindHistoryList() {
   bindCards();
   document.querySelectorAll('.starb').forEach(b => b.onclick = async ev => {
-    ev.stopPropagation(); const id = b.dataset.star; const e = S.entries.find(x => x.id === id); if (!e) return;
+    ev.stopPropagation(); if (S.viewAs) { toast('見るだけの画面です'); return; } const id = b.dataset.star; const e = S.entries.find(x => x.id === id); if (!e) return;
     const v = !e.star; e.star = v; save(); refreshList();
     try { await api('star', { key: S.key, entryId: id, star: v }); }
     catch (err) { e.star = !v; save(); refreshList(); toast(err.server ? err.message : 'ネットにつながっていません。つながってからもう一度'); }
@@ -598,8 +612,10 @@ function renderMembers() {
 function renderMember() {
   const es = cSort(S.cd.entries.filter(e => e.uid === S.member));
   shell('顧問用　' + memberName(S.member) + 'の記録', `<button class="link" id="back" style="margin-bottom:10px">← 部員ごとにもどる</button>
+    <button class="btn ghost" id="viewas" style="margin:0 0 12px;padding:10px">この部員の画面で見る</button>
     <div class="list">${es.map(e => entryHTML(e, { coach: true, replies: cRepliesFor(e.id), tag: cRepliesFor(e.id).length ? '' : '<span class="tag">未返事</span>' })).join('') || '<p class="mini center">まだ記録がありません</p>'}</div>`);
   $('#back').onclick = () => history.back();
+  $('#viewas').onclick = () => { enterView(S.member); pushNav(); render(); window.scrollTo(0, 0); };
   bindCards(); bindReplies();
 }
 
@@ -784,8 +800,10 @@ const best = t => { const a = nums(t); return a.length ? Math.max(...a) : null; 
 function jumpTable(all) {
   const rd = v => v == null ? null : Math.round(v * 10) / 10;
   const withDiff = (o, reach) => Object.assign(o, { vj: reach && o.stand ? rd(o.stand - reach) : null, jh: reach && o.run ? rd(o.run - reach) : null });
-  const refs = all.filter(j => /^ref:/.test(j.uid)).map(j => withDiff({ name: j.name, run: best(j.run), stand: best(j.stand) }, Number(j.reach) > 0 ? Number(j.reach) : null));
-  const jumps = all.filter(j => !/^ref:/.test(j.uid));
+  const ru = {}; all.filter(j => /^ref:/.test(j.uid)).forEach(j => { ru[j.uid] = j; });
+  const refs = Object.values(ru).map(j => withDiff({ name: j.name, run: best(j.run), stand: best(j.stand) }, Number(j.reach) > 0 ? Number(j.reach) : null));
+  /* 同じ部員・同じ測定日が何行あっても1つにする（あとの行を使う） */
+  const uniq = {}; all.filter(j => !/^ref:/.test(j.uid)).forEach(j => { uniq[j.uid + '|' + j.date] = j; }); const jumps = Object.values(uniq);
   const reachOf = {}; [...jumps].sort((a, b) => a.date.localeCompare(b.date)).forEach(j => { if (Number(j.reach) > 0) reachOf[j.uid] = Number(j.reach); });
   const people = {}; jumps.forEach(j => { (people[j.uid] = people[j.uid] || { uid: j.uid, name: j.name, rows: [] }).rows.push({ date: j.date, stand: best(j.stand), run: best(j.run), id: j.id }); });
   Object.values(people).forEach(p => { p.rows.sort((a, b) => a.date.localeCompare(b.date)); p.reach = reachOf[p.uid] || null; p.rows.forEach(r => withDiff(r, p.reach)); });
@@ -848,7 +866,7 @@ function renderCoachJump() {
       <div class="mapr"><span>指高</span><input class="jin" data-u="${m.id}" data-k="reach" inputmode="decimal" placeholder="${reach(m.id) ? '前回 ' + reach(m.id) + '（測ったときだけ）' : '測ったときだけ'}" value="${esc(h.reach || '')}"></div></div>`; }).join('')}
     <button class="btn" id="jsave" style="padding:12px">保存する</button>
     <details class="who" style="margin-top:10px"><summary>まとめて読み込む（ファイル）</summary><input type="file" id="jfile" accept=".json,application/json"></details></div>`;
-  const byDate = T.dates.slice().reverse().map(dt => { const rows = J.filter(j => j.date === dt && !/^ref:/.test(j.uid));
+  const byDate = T.dates.slice().reverse().map(dt => { const u = {}; J.filter(j => j.date === dt && !/^ref:/.test(j.uid)).forEach(j => { u[j.uid] = j; }); const rows = Object.values(u);
     return `<div class="card"><div class="date"><span>${esc(jdate(dt))}</span><span class="mini">${rows.length}人</span></div>${rows.map(j => `<div class="sline"><b>${esc(j.name)}</b>その場 ${esc(j.stand || '—')}　助走 ${esc(j.run || '—')}${j.reach ? `　指高 ${esc(j.reach)}` : ''}</div>`).join('')}
       <div class="rbtns"><button class="mini-btn" data-jedit="${dt}">この日を直す</button><button class="mini-btn del" data-jdel="${dt}">この日を消す</button></div></div>`; }).join('');
   const refCard = (T.refs || []).length ? `<div class="card"><div class="date"><span>参考：先輩のベスト</span></div>${T.refs.map(r => `<div class="sline"><b>${esc(r.name)}</b>最高到達点 ${r.run ?? '—'}　その場 ${r.stand ?? '—'}${r.jh != null ? `　跳躍高 ${r.jh}` : ''}</div>`).join('')}<div class="rbtns"><button class="mini-btn del" data-jdel="ref">参考を消す</button></div></div>` : '';
@@ -885,6 +903,24 @@ function renderCoachJump() {
     catch (e) { toast(e && e.server ? e.message : 'ジャンプのファイルではないようです'); }
   };
   bindFoot();
+}
+
+/* ===== 顧問：部員の画面で見る（見るだけ。データは顧問の一覧から作る） ===== */
+const VIEW_KEYS = ['entries', 'replies', 'notices', 'reports', 'jumps', 'name', 'me', 'role', 'tab', 'seen', 'seenN', 'seenRep', 'draft', 'outbox', 'member', 'cview', 'hq', 'starOnly', 'hmode'];
+function enterView(uid) {
+  const m = (S.cd.members || []).find(x => x.id === uid); if (!m) return;
+  S.viewBak = {}; VIEW_KEYS.forEach(k => S.viewBak[k] = S[k]);
+  S.viewAs = uid;
+  const es = (S.cd.entries || []).filter(e => e.uid === uid).map(e => Object.assign({}, e, { star: e.star === true || e.star === '1' }));
+  const ids = new Set(es.map(e => e.id));
+  const forMe = n => n.to === 'all' || n.to === uid || (/^grade:/.test(n.to) && String(n.targets || '').split(',').includes(uid));
+  S.entries = es; S.replies = (S.cd.replies || []).filter(r => ids.has(r.entryId)); S.notices = (S.cd.notices || []).filter(forMe);
+  S.reports = (S.cd.reports || []).filter(r => r.uid === uid || r.uid === 'team'); S.jumps = S.cd.jumps || [];
+  S.name = m.name; S.me = uid; S.role = 'student'; S.tab = 'today'; S.member = null; S.cview = null; S.hq = ''; S.starOnly = false; S.hmode = 'all';
+  S.seen = S.replies.map(rkey); S.seenN = S.notices.map(nkey); S.seenRep = S.reports.map(rkeyRep); S.draft = null; S.outbox = [];
+}
+function exitView() {
+  if (!S.viewAs) return; const b = S.viewBak || {}; S.viewAs = null; VIEW_KEYS.forEach(k => { if (k in b) S[k] = b[k]; }); S.viewBak = null; S.tab = 'members';
 }
 
 function render() {

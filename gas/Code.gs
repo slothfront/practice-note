@@ -226,9 +226,9 @@ function handle_(b) {
     return withLock_(() => {
       const sh = book.getSheetByName(SHEET.jumps); const v = sh.getDataRange().getValues(); const h = v[0];
       const keys = new Set(rows.map(r => r.uid + '|' + r.date));
-      for (let i = v.length - 1; i >= 1; i--) if (keys.has(String(v[i][h.indexOf('uid')]) + '|' + String(v[i][h.indexOf('date')]))) sh.deleteRow(i + 1);
+      for (let i = v.length - 1; i >= 1; i--) if (keys.has(String(v[i][h.indexOf('uid')]) + '|' + dstr_(v[i][h.indexOf('date')]))) sh.deleteRow(i + 1);
       const now = new Date().toISOString();
-      rows.forEach(r => sh.appendRow(['j' + Utilities.getUuid().slice(0, 8), String(r.uid), String(r.date), String(r.stand || ''), String(r.run || ''), String(r.reach || ''), now, user.name]));
+      rows.forEach(r => { sh.appendRow(['j' + Utilities.getUuid().slice(0, 8), String(r.uid), String(r.date), String(r.stand || ''), String(r.run || ''), String(r.reach || ''), now, user.name]); sh.getRange(sh.getLastRow(), 1, 1, COLS.jumps.length).setNumberFormat('@'); });
       const mine = new Set(rows.map(r => r.uid + '|' + r.date));
       return { ok: true, jumps: jumpsOf_(book).filter(j => mine.has(j.uid + '|' + j.date)) };
     });
@@ -236,7 +236,7 @@ function handle_(b) {
   if (a === 'deleteJumps' && coach) {
     const d = String(b.date || ''); if (d !== 'ref' && !/^\d{4}-\d{2}-\d{2}$/.test(d)) return { ok: false, error: '測定日の形がちがいます' };
     return withLock_(() => { const sh = book.getSheetByName(SHEET.jumps); const v = sh.getDataRange().getValues(); const ci = v[0].indexOf('date');
-      for (let i = v.length - 1; i >= 1; i--) if (String(v[i][ci]) === d) sh.deleteRow(i + 1); return { ok: true }; });
+      for (let i = v.length - 1; i >= 1; i--) if (dstr_(v[i][ci]) === d) sh.deleteRow(i + 1); return { ok: true }; });
   }
   if (a === 'deleteReports' && coach) {
     const mid = String(b.matchId || ''); if (!mid) return { ok: false, error: '試合がちがいます' };
@@ -298,6 +298,8 @@ function readAll_(sh) {
   const v = sh.getDataRange().getValues(); const h = v[0];
   return v.slice(1).filter(r => r.some(c => c !== '')).map(r => { const o = {}; h.forEach((k, i) => o[k] = r[i] instanceof Date ? fmtDate_(r[i]) : r[i]); return o; });
 }
+/** 表が日付に変えてしまったマスも、文字の日付（2026-10-13）にそろえる */
+function dstr_(x) { return x instanceof Date ? fmtDate_(x) : String(x); }
 function fmtDate_(d) { return Utilities.formatDate(d, 'Asia/Tokyo', 'yyyy-MM-dd'); }
 function clean_(r) {
   const o = {}; COLS.entries.forEach(c => { if (c !== 'uid' && c !== 'received') o[c] = r[c]; });
