@@ -1011,8 +1011,19 @@ function render() {
 
 window.addEventListener('online', async () => { await refresh(); render(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveDraft(); });
+/* 更新（再読み込み）しても同じ画面にとどまる：履歴に残した画面と、閉じる前のスクロール位置から戻す */
+const st0 = (() => { try { return history.state; } catch (e) { return null; } })();
+const TABS = { coach: ['new', 'members', 'notice', 'creport', 'cjump', 'cboard'], student: ['today', 'history', 'graph', 'report', 'snotice'] };
+if (S.key && !S.needSet && st0 && st0.pn) {
+  if (S.role === 'coach' && st0.viewAs && (S.cd.members || []).some(m => m.id === st0.viewAs)) enterView(st0.viewAs);
+  const ok = TABS[S.role === 'coach' ? 'coach' : 'student'];
+  if (ok.includes(st0.tab)) S.tab = st0.tab;
+  if (S.role === 'coach' && !S.viewAs) { S.member = st0.member || null; S.cview = st0.cview || null; }
+}
 try { history.replaceState(navState(), ''); } catch (e) {}
+window.addEventListener('pagehide', () => { try { history.replaceState(Object.assign(navState(), { y: window.scrollY }), ''); } catch (e) {} });
 render();
+if (st0 && st0.y) requestAnimationFrame(() => window.scrollTo(0, st0.y));
 if (S.key && S.role === 'coach') refresh().then(ok => { if (ok) render(); });
 else if (S.key) refresh().then(ok => { if (!ok) return; const n = unseen().length, m = unseenN().length; if (S.tab !== 'today' || m) render(); if (n) toast(`先生からの返事が${n}件あります`); });
 </script>
