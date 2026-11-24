@@ -1,6 +1,6 @@
-# main の gas/ が変わったら、GAS（受け口）に「自分を入れ替えて」と合図する。
-# GAS 側は selfUpdate_（gas/Code.gs）が GitHub から同じコミットのコードを取り込み、新しいバージョンでデプロイし直す（URL は変わらない）。
-# 合図の合言葉は Secrets「GAS_UPDATE_TOKEN」（GAS で makeUpdateToken を実行するとできる）。
+# main の gas/ が変わったら、別のスクリプト「更新係」（gas-updater/）に合図する。
+# 更新係が GitHub の同じコミットの gas/ を本体のGASに入れ、新しいバージョンでデプロイし直す（本体のURLは変わらない）。
+# Secrets：GAS_UPDATER_URL（更新係のウェブアプリのURL）・GAS_UPDATE_TOKEN（更新係で makeUpdateToken を実行するとできる）。
 name: GASを入れ替える
 on:
   push:
@@ -21,14 +21,14 @@ jobs:
         run: |
           node -e "new Function(require('fs').readFileSync('gas/Code.gs','utf8'))"
           node -e "JSON.parse(require('fs').readFileSync('gas/appsscript.json','utf8'))"
-      - name: GASに合図する
+      - name: 更新係に合図する
         env:
           TOKEN: ${{ secrets.GAS_UPDATE_TOKEN }}
+          URL: ${{ secrets.GAS_UPDATER_URL }}
           SHA: ${{ github.sha }}
         run: |
-          if [ -z "$TOKEN" ]; then echo "Secrets「GAS_UPDATE_TOKEN」がまだありません"; exit 1; fi
-          URL=$(grep -o "https://script.google.com/macros/s/[A-Za-z0-9_-]*/exec" index.html | head -1)
-          BODY=$(jq -cn --arg t "$TOKEN" --arg s "$SHA" '{action:"selfUpdate",token:$t,sha:$s}')
+          if [ -z "$TOKEN" ] || [ -z "$URL" ]; then echo "Secrets「GAS_UPDATE_TOKEN」「GAS_UPDATER_URL」がまだそろっていません"; exit 1; fi
+          BODY=$(jq -cn --arg t "$TOKEN" --arg s "$SHA" '{token:$t,sha:$s}')
           # POST して、Google の転送先は GET で受け取る（curl は 302 で GET に切りかえる）
           RES=$(curl -sSL --max-time 120 -H 'Content-Type: text/plain;charset=utf-8' --data "$BODY" "$URL")
           echo "$RES" | jq -r '"結果：" + (.result // .error // "不明")' || echo "$RES" | head -c 300

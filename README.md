@@ -36,6 +36,7 @@
 - `manifest.webmanifest`・アイコン類：ホーム画面に追加したときの名前と絵
 - `gas/Code.gs`：記録をためるGoogleの表とのやり取り（Google Apps Script）
 - `gas/appsscript.json`：GASの設定（タイムゾーン・ウェブアプリの公開範囲・使う許可）
+- `gas-updater/`：GASを自動で入れ替える「更新係」（別のスクリプト）
 
 ## しくみ
 
@@ -46,14 +47,15 @@
 
 ### GASの自動更新
 
-`main` の `gas/`（`Code.gs`・`appsscript.json`）が変わると、GitHub Actions（`.github/workflows/gas-update.yml`）がGASに合図し、
-GASが同じコミットのコードを自分で取り込んで、新しいバージョンでデプロイし直す（`selfUpdate_`・URLは変わらない）。
-結果は表の「更新」シートに1行ずつ残る。形のおかしいコードや、自動更新の仕組みが入っていないコードには入れ替えない。
+`main` の `gas/`（`Code.gs`・`appsscript.json`）が変わると、GitHub Actions（`.github/workflows/gas-update.yml`）が
+別のスクリプト **「更新係」**（`gas-updater/`）に合図する。更新係が同じコミットの `gas/` を本体のGASに入れ、新しいバージョンでデプロイし直す（本体のURLは変わらない）。
+Apps Script API を使うのは更新係だけで、自分の Google Cloud プロジェクトにつなぐのも更新係だけ。本体のGASは既定のままなので、更新係が止まってもアプリは止まらない。
 
-- 合図の合言葉：GASの `makeUpdateToken` を実行 → ログの1行を GitHub の Secrets「GAS_UPDATE_TOKEN」へ
-- 手で取り込むとき：GASのエディタで `updateFromGitHub` を実行
-- 戻すとき：「デプロイを管理」で前のバージョンを選ぶ
-- 使う許可（`appsscript.json` の `oauthScopes`）を増やすときは、自動では許可されないので、エディタで1回実行して許可する
+- 更新係の置き場：script.google.com の別のプロジェクト「PRACTICE NOTE 更新係」（`gas-updater/Code.gs`・`appsscript.json` を手で貼る。自動では更新されない）
+- Secrets：`GAS_UPDATER_URL`（更新係のウェブアプリのURL）・`GAS_UPDATE_TOKEN`（更新係で `makeUpdateToken` を実行するとできる）
+- 結果：Actions の実行記録に「結果：…」と出る。手で動かすとき＝更新係で `updateNow`
+- 形のおかしいコード・受け口でないコードには入れ替えない。戻すとき＝本体の「デプロイを管理」で前のバージョンを選ぶ
+- 本体の使う許可（`gas/appsscript.json` の `oauthScopes`）を増やすときは、自動では許可されないので、本体のエディタで1回実行して許可する
 - 前提：[Apps Scriptの設定](https://script.google.com/home/usersettings)で「Google Apps Script API」がオン。バージョンは1つのスクリプトで200まで
 
 ### GASを入れ直すとき
