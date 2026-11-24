@@ -241,7 +241,7 @@ function toast(msg) { document.querySelectorAll('.toast').forEach(x => x.remove(
 const allEntries = () => { const ids = new Set(S.entries.map(e => e.id)); return [...S.entries, ...S.outbox.filter(e => !ids.has(e.id)).map(e => ({ ...e, _wait: true }))].sort((a, b) => b.date.localeCompare(a.date) || (Date.parse(b.at) - Date.parse(a.at))); };
 const repliesFor = id => S.replies.filter(r => r.entryId === id).sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 const nkey = n => n.edited ? `${n.id}@${n.edited}` : n.id;
-/* お知らせは「見ました」を押すまで開いて出す。押した記録（既読）は表にあり、直されたお知らせはもう一度開く */
+/* お知らせは「既読にする」を押すまで開いて出す。押した記録（既読）は表にあり、直されたお知らせはもう一度開く */
 const confirmedN = n => { const r = (S.readN || []).find(x => x.noticeId === n.id); return !!r && !(n.edited && Date.parse(n.edited) > Date.parse(r.at || 0)); };
 const unseenN = () => S.notices.filter(n => !confirmedN(n));
 async function reportReads() {
@@ -373,7 +373,7 @@ function renderToday() {
   <div class="q">うまくいかなかったのは？なぜ？</div><textarea id="bad">${esc(d.bad)}</textarea>
   <div class="q">誰かに言われたこと・気づいたことは？</div><textarea id="heard">${esc(d.heard)}</textarea>`;
   const nNew = unseenN();
-  const noticeBlock = nNew.length ? `<button class="notice fresh" id="toN" style="width:100%;text-align:left;font:inherit;cursor:pointer"><div class="date"><span>先生からのお知らせ　<b>${nNew.length}件</b>（まだ「見ました」を押していません）</span><span class="tag">NEW</span></div><div class="mini">押すとお知らせのタブを開きます</div></button>` : '';
+  const noticeBlock = nNew.length ? `<button class="notice fresh" id="toN" style="width:100%;text-align:left;font:inherit;cursor:pointer"><div class="date"><span>先生からのお知らせ　<b>${nNew.length}件</b>（まだ「既読にする」を押していません）</span><span class="tag">NEW</span></div><div class="mini">押すとお知らせのタブを開きます</div></button>` : '';
   shell(`${jdate(today())}　${S.name}`, `
   ${noticeBlock}
   ${lastMatchCard()}
@@ -555,7 +555,7 @@ function renderNotices() {
     <div class="q">宛先</div><select id="nto"><option value="all">全員（${mem.length}人）</option>${grades.map(g => `<option value="grade:${g}">${g}年（${mem.filter(m => m.grade === g).length}人）</option>`).join('')}<optgroup label="1人に送る">${mem.map(m => `<option value="${m.id}">${esc(m.name)}${m.grade ? `（${m.grade}年）` : ''}</option>`).join('')}</optgroup></select>${mem.some(m => !m.grade) ? '<div class="mini" style="margin-top:4px">学年が入っていない部員がいます（表の「部員」シートF列）</div>' : ''}
     <div class="q">お知らせ</div><textarea id="ntext">${esc(S.nDraft || '')}</textarea>
     <button class="btn" id="nsend" style="margin-top:10px;padding:12px">送る</button>
-    <div class="mini" style="margin-top:6px">部員のアプリの「お知らせ」タブに出ます。部員が「見ました」を押すと既読になります</div></div>
+    <div class="mini" style="margin-top:6px">部員のアプリの「お知らせ」タブに出ます。部員が「既読にする」を押すと、だれが読んだか分かります</div></div>
     <div class="h"><span class="en">SENT</span><span class="ja">送ったお知らせ</span></div>
     <div class="list">${all.map(card).join('') || '<p class="mini center">まだ送っていません</p>'}</div>
     <div class="foot"><button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);
@@ -985,13 +985,13 @@ function renderBoard() {
   if (ids.length) api('cnoteRead', { key: S.key, ids }).then(() => { S.cd.creads = [...(S.cd.creads || []), ...ids.map(id => ({ noteId: id, uid: S.me }))]; store.set('cd', S.cd); }).catch(() => {});
 }
 
-/* ===== 部員：お知らせのタブ（「見ました」を押すまで開いて出す） ===== */
+/* ===== 部員：お知らせのタブ（「既読にする」を押すまで開いて出す） ===== */
 function renderStudentNotices() {
   const nNew = unseenN().sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   const nOld = S.notices.filter(x => !nNew.includes(x)).sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
-  const nCard = (x, fresh) => `<div class="notice ${fresh ? 'fresh' : ''}"><div class="date"><span>${esc(x.by)}から　<span class="mini">${x.to === 'all' ? '全員へ' : /^grade:/.test(x.to) ? x.to.slice(6) + '年へ' : 'あなたへ'}・${jdate(localDate(x.at))}${x.edited ? '（直しました）' : ''}</span></span>${fresh ? '<span class="tag">NEW</span>' : ''}</div><div class="ntext">${esc(x.text)}</div>${fresh ? `<div class="rbtns"><button class="mini-btn save nok" data-nid="${x.id}">見ました</button></div>` : ''}</div>`;
+  const nCard = (x, fresh) => `<div class="notice ${fresh ? 'fresh' : ''}"><div class="date"><span>${esc(x.by)}から　<span class="mini">${x.to === 'all' ? '全員へ' : /^grade:/.test(x.to) ? x.to.slice(6) + '年へ' : 'あなたへ'}・${jdate(localDate(x.at))}${x.edited ? '（直しました）' : ''}</span></span>${fresh ? '<span class="tag">NEW</span>' : ''}</div><div class="ntext">${esc(x.text)}</div>${fresh ? `<div class="rbtns"><button class="mini-btn save nok" data-nid="${x.id}">既読にする</button></div>` : ''}</div>`;
   shell(S.name, `<div class="h" style="margin-top:4px"><span class="en">FROM COACH</span><span class="ja">先生から</span></div>
-    ${nNew.length ? `<div class="hint">読んだら「見ました」を押してください。押すと下の「前のお知らせ」に移ります</div>${nNew.map(x => nCard(x, true)).join('')}` : '<p class="mini center" style="margin:14px 0">新しいお知らせはありません</p>'}
+    ${nNew.length ? `<div class="hint">読んだら「既読にする」を押してください。押すと下の「前のお知らせ」に移ります</div>${nNew.map(x => nCard(x, true)).join('')}` : '<p class="mini center" style="margin:14px 0">新しいお知らせはありません</p>'}
     ${nOld.length ? `<div class="h"><span class="en">BEFORE</span><span class="ja">前のお知らせ（${nOld.length}件）</span></div>${nOld.map(x => nCard(x, false)).join('')}` : ''}
     <div class="foot"><button class="link" id="reload">最新にする</button></div>`);
   bindFoot();
