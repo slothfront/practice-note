@@ -342,7 +342,7 @@ function renderSetKey(err) {
   };
 }
 
-const F = [['n1', '意識できた', 'r1'], ['n2', '体', 'r2'], ['n3', '気持ち', 'r3']];
+const F = [['n1', '意識できた', 'r1'], ['n2', '体の調子', 'r2'], ['n3', '気持ち', 'r3']];
 const FM = [...F, ['n4', 'プレーの出来', 'r4']];
 const fieldsOf = e => e.type === 'match' ? FM : F;
 /* 試合のふり返り（全部必ず書く） */
@@ -446,7 +446,7 @@ function entryHTML(e, o) {
     <div class="date"><span>${o.who ? `${esc(o.who)}　` : ''}${jdate(e.date)}${M ? ' <span class="tag match">MATCH</span>' : ''}</span><span>${o.tag || ''}${o.coach || e._wait ? '' : starBtn(e)}</span></div>
     <div class="kv"><span class="k">FOCUS　今日意識すること</span>${esc(e.focus)}</div>
     ${M ? `<div class="kv"><span class="k">MATCH　相手と結果</span>${esc(e.opp)}</div>` : ''}
-    <div class="nums">意識できた <b>${e.n1}</b>　体 <b>${e.n2}</b>　気持ち <b>${e.n3}</b>${M ? `　出来 <b>${e.n4}</b>` : ''}</div>
+    <div class="nums">意識できた <b>${e.n1}</b>　体の調子 <b>${e.n2}</b>　気持ち <b>${e.n3}</b>${M ? `　出来 <b>${e.n4}</b>` : ''}</div>
     ${o.coach ? reasons + toc : ''}
     <div class="more">${o.coach ? '' : reasons}${detail}${o.coach ? '' : toc}</div>
     <div class="kv"><span class="k">NEXT　次にどうする</span>${esc(e.next)}</div>
@@ -593,7 +593,7 @@ function renderCoach() {
   const list = cSort(S.showAll ? S.cd.entries : unreplied());
   const body = list.length ? list.map(e => entryHTML(e, { coach: true, open: true, who: memberName(e.uid), replies: cRepliesFor(e.id), tag: cRepliesFor(e.id).length ? '' : '<span class="tag">未返事</span>' })).join('')
     : `<p class="mini center" style="margin-top:40px">${S.showAll ? 'まだ記録がありません' : '返事を待っている記録はありません'}</p>`;
-  shell('顧問用　' + S.name, `<div class="mini" style="margin:2px 0 10px">体・気持ち・出来などに1か2がある記録は、左に黄色の線が付きます</div>
+  shell('顧問用　' + S.name, `<div class="mini" style="margin:2px 0 10px">体の調子・気持ち・出来などに1か2がある記録は、左に黄色の線が付きます</div>
     <div class="list">${body}</div>
     <div class="foot"><button class="link" id="all">${S.showAll ? '返事を待っている記録だけ見る' : '返事済みも見る'}</button>　<button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);
   $('#all').onclick = () => { S.showAll = !S.showAll; render(); };
@@ -605,7 +605,7 @@ function renderMembers() {
     const wait = es.filter(e => !S.cd.replies.some(r => r.entryId === e.id)).length;
     return `<div class="card member" data-uid="${m.id}"><div class="date"><span>${esc(m.name)}</span>${wait ? `<span class="tag">未返事 ${wait}</span>` : ''}</div>
       <div class="mini">記録 ${es.length}件　${last ? `最後 ${jdate(last.date)}` : 'まだ記録なし'}${cnotesOf(m.id).length ? `　顧問メモ ${cnotesOf(m.id).length}件` : ''}</div>
-      ${last ? `<div class="nums">意識できた <b>${last.n1}</b>　体 <b>${last.n2}</b>　気持ち <b>${last.n3}</b>${last.type === 'match' ? `　出来 <b>${last.n4}</b>` : ''}</div>` : ''}</div>`;
+      ${last ? `<div class="nums">意識できた <b>${last.n1}</b>　体の調子 <b>${last.n2}</b>　気持ち <b>${last.n3}</b>${last.type === 'match' ? `　出来 <b>${last.n4}</b>` : ''}</div>` : ''}</div>`;
   }).join('');
   shell('顧問用　' + S.name, `<div class="list">${rows || '<p class="mini center">部員がまだいません</p>'}</div><div class="foot"><button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);
   document.querySelectorAll('.member').forEach(c => c.onclick = () => { S.member = c.dataset.uid; pushNav(); render(); window.scrollTo(0, 0); });
@@ -635,7 +635,7 @@ function renderGraph() {
     <g font-size="10" fill="#6f7782">${[1, 2, 3, 4, 5].map(v => `<text x="16" y="${y(v) + 4}">${v}</text>`).join('')}
     ${L.map((e, i) => (i === 0 || i === L.length - 1 || L.length <= 7) ? `<text x="${x(i)}" y="186" text-anchor="middle">${Number(e.date.slice(5, 7))}/${Number(e.date.slice(8))}</text>` : '').join('')}</g>
     ${S3.map(([k, c, d]) => `<polyline fill="none" stroke="${c}" stroke-width="2.5" ${d ? `stroke-dasharray="${d}"` : ''} points="${L.map((e, i) => `${x(i)},${y(e[k])}`).join(' ')}"/>` + L.map((e, i) => `<circle cx="${x(i)}" cy="${y(e[k])}" r="3.2" fill="${c}"/>`).join('')).join('')}
-    </svg><div class="legend"><span><i style="--c:#1F4E79"></i>意識できた</span><span><i class="d" style="--c:#2E75B6"></i>体（破線）</span><span><i style="--c:#FFC000"></i>気持ち</span></div></div>`;
+    </svg><div class="legend"><span><i style="--c:#1F4E79"></i>意識できた</span><span><i class="d" style="--c:#2E75B6"></i>体の調子（破線）</span><span><i style="--c:#FFC000"></i>気持ち</span></div></div>`;
   }
   const low = allEntries().filter(e => fieldsOf(e).some(([n, , r]) => e[n] <= 2 && e[r])).slice(0, 5);
   shell(S.name, `<div class="h" style="margin-top:4px"><span class="en">TREND</span><span class="ja">数字の推移</span></div><div class="hint">最近14回まで</div>${svg}
