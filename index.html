@@ -103,7 +103,7 @@ textarea:focus,input:focus{outline:0;border-color:var(--main)}
 .ntext{white-space:pre-wrap;font-size:14px;line-height:1.6;margin-top:4px}
 details.oldn,details.who{margin:4px 0 8px}details.oldn summary,details.who summary{font-size:12px;color:var(--main,#1F4E79);cursor:pointer;padding:4px 0}
 /* 顧問の画面はパープル */
-body.coach{--main:#5B4B9A;--soft:#EEEAF7;--line2:#DDD6EE;--bg:#F6F4FB;--btn:#5B4B9A;--btnshadow:#43376F;background:var(--bg)}
+html.is-coach{--main:#5B4B9A;--soft:#EEEAF7;--line2:#DDD6EE;--bg:#F6F4FB;--btn:#5B4B9A;--btnshadow:#43376F}
 .vbar{background:var(--acc2,#FFE27A);color:#1a1a1a;font-size:13px;font-weight:700;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:6}
 .vbar button{border:2px solid #5B4B9A;background:#5B4B9A;color:#fff;border-radius:999px;padding:5px 12px;font:inherit;font-size:12px;font-weight:700;white-space:nowrap}
 /* これまで：気づき・検索・☆ */
@@ -278,7 +278,7 @@ async function refresh() {
 /* ===== 画面 ===== */
 function shell(sub, body) {
   const n = S.role === 'coach' ? 0 : unseen().length;
-  const C = S.role === 'coach' && !!S.key && !S.needSet; document.body.classList.toggle('coach', C);
+  const C = S.role === 'coach' && !!S.key && !S.needSet; document.documentElement.classList.toggle('is-coach', C);
   const tc = document.querySelector('meta[name=theme-color]'); if (tc) tc.setAttribute('content', C ? '#5B4B9A' : '#22B3A6');
   $('#app').innerHTML = (DEMO ? '<div class="demo">見本モード（本物には送られません）</div>' : '') +
     (S.viewAs ? `<div class="vbar"><span>${esc(S.name)}の画面（見るだけ）</span><button id="vexit">顧問の画面にもどる</button></div>` : '') +
