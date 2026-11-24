@@ -369,9 +369,9 @@ function renderToday() {
   <div class="h"><span class="en">MATCH REVIEW</span><span class="ja">試合のふり返り</span></div><div class="hint">全部書く。場面と「なぜ」を入れて</div>
   ${MQ.map(([k, q, h]) => `<div class="q">${q}${h ? `<span class="mini">（${h}）</span>` : ''}</div><textarea id="${k}">${esc(d[k])}</textarea>`).join('')}` : `
   <div class="h"><span class="en">REVIEW</span><span class="ja">ふり返り</span></div><div class="hint">書けるものだけでOK</div>
-  <div class="q">今日よかったプレーは？</div><textarea id="good">${esc(d.good)}</textarea>
-  <div class="q">うまくいかなかったのは？なぜ？</div><textarea id="bad">${esc(d.bad)}</textarea>
-  <div class="q">誰かに言われたこと・気づいたことは？</div><textarea id="heard">${esc(d.heard)}</textarea>`;
+  <div class="q">今日よかったプレー</div><textarea id="good">${esc(d.good)}</textarea>
+  <div class="q">うまくいかなかったこと・その理由</div><textarea id="bad">${esc(d.bad)}</textarea>
+  <div class="q">誰かに言われたこと・気づいたこと</div><textarea id="heard">${esc(d.heard)}</textarea>`;
   const nNew = unseenN();
   const noticeBlock = nNew.length ? `<button class="notice fresh" id="toN" style="width:100%;text-align:left;font:inherit;cursor:pointer"><div class="date"><span>先生からのお知らせ　未読 <b>${nNew.length}件</b></span><span class="tag">未読</span></div><div class="mini">押すとお知らせのタブを開きます</div></button>` : '';
   shell(`${jdate(today())}　${S.name}`, `
