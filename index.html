@@ -102,6 +102,14 @@ textarea:focus,input:focus{outline:0;border-color:var(--main)}
 .notice.fresh{border-left-color:var(--acc2,#FFC000)}
 .ntext{white-space:pre-wrap;font-size:14px;line-height:1.6;margin-top:4px}
 details.oldn,details.who{margin:4px 0 8px}details.oldn summary,details.who summary{font-size:12px;color:var(--main,#1F4E79);cursor:pointer;padding:4px 0}
+/* これまで：気づき・検索・☆ */
+.hctl{background:#fff;border-radius:16px;padding:8px 10px;margin-bottom:12px;box-shadow:0 2px 8px rgba(30,60,100,.07)}
+.hctl .seg{margin:0 0 8px;box-shadow:none;background:var(--soft,#eef)}
+.hctl .srow{display:flex;gap:8px;align-items:center}.hctl input{flex:1;padding:8px 10px;font-size:15px}
+.starb{border:0;background:none;font-size:22px;line-height:1;padding:0 2px;color:#b8c2cc;cursor:pointer}.starb.on{color:#E0A800}
+.stoggle{border:2px solid var(--line2,#d0d7e1);background:#fff;border-radius:999px;padding:6px 10px;font:inherit;font-size:13px;font-weight:700;color:var(--gray);white-space:nowrap}.stoggle.on{border-color:#E0A800;color:#000;background:#FFF6D1}
+mark{background:#FFE27A;color:inherit;padding:0 1px;border-radius:3px}
+.ins .kv{margin:5px 0}
 /* レポート */
 .rep h4{margin:14px 0 4px;color:var(--ink2,#1F4E79);font-size:14px}
 .rep p{margin:4px 0;font-size:14px;line-height:1.65}
@@ -193,6 +201,7 @@ async function demoApi(action, b) {
   }
   if (action === 'editReply' && isCoach) { const r = db.replies.find(x => x.id === b.replyId); if (!r) throw Object.assign(new Error('返事が見つかりません'), { server: true }); r.text = b.text; r.edited = new Date().toISOString(); store.set('demo_db2', db); return { ok: true, reply: r }; }
   if (action === 'deleteReply' && isCoach) { db.replies = db.replies.filter(x => x.id !== b.replyId); store.set('demo_db2', db); return { ok: true }; }
+  if (action === 'star' && !isCoach) { const e = db.entries.find(x => x.id === b.entryId && x.uid === user.id); if (!e) throw Object.assign(new Error('記録が見つかりません'), { server: true }); e.star = b.star ? '1' : ''; store.set('demo_db2', db); return { ok: true }; }
   if (action === 'addReports' && isCoach) { db.reports = (db.reports || []).filter(r => r.matchId !== b.matchId); const now = new Date().toISOString(); const add = b.items.map((it, i) => ({ id: 'p' + Date.now().toString(36) + i, matchId: b.matchId, uid: it.uid, at: now, data: it.data })); db.reports.push(...add); store.set('demo_db2', db); return { ok: true, reports: add }; }
   if (action === 'deleteReports' && isCoach) { db.reports = (db.reports || []).filter(r => r.matchId !== b.matchId); store.set('demo_db2', db); return { ok: true }; }
   const e = new Error('できない操作です'); e.server = true; throw e;
@@ -204,7 +213,7 @@ const S = {
   cd: store.get('cd', { members: [], entries: [], replies: [] }), reports: store.get('reports', []), seenRep: store.get('seenRep', []), imp: null, member: null, showAll: false, repDraft: {},
   entries: store.get('entries', []), replies: store.get('replies', []),
   outbox: store.get('outbox', []), seen: store.get('seen', []),
-  tab: 'today', draft: store.get('draft', null), justSeen: []
+  tab: 'today', draft: store.get('draft', null), justSeen: [], hmode: store.get('hmode', 'all'), hq: '', starOnly: false
 };
 const save = () => { store.set('reports', S.reports); store.set('seenRep', S.seenRep); store.set('notices', S.notices); store.set('seenN', S.seenN); store.set('reportedN', S.reportedN); store.set('entries', S.entries); store.set('replies', S.replies); store.set('outbox', S.outbox); store.set('seen', S.seen); };
 
@@ -250,7 +259,7 @@ async function refresh() {
   try {
     await flush();
     const j = await api('list', { key: S.key });
-    S.entries = j.entries; S.replies = j.replies; S.notices = j.notices || []; S.reports = parseReports(j.reports); if (j.name) { S.name = j.name; store.set('name', j.name); }
+    S.entries = (j.entries || []).map(e => Object.assign(e, { star: e.star === true || e.star === '1' || e.star === 1 })); S.replies = j.replies; S.notices = j.notices || []; S.reports = parseReports(j.reports); if (j.name) { S.name = j.name; store.set('name', j.name); }
     save(); return true;
   } catch (e) { forgetIfBadKey(e); return false; }
 }
@@ -406,7 +415,7 @@ function entryHTML(e, o) {
       ${M ? MQ.map(([k, q]) => e[k] ? `<div class="kv"><span class="k">${q}</span>${esc(e[k])}</div>` : '').join('') : ''}`;
   const toc = e.tocoach ? `<div class="kv tocoach"><span class="k">顧問に伝えたいこと</span>${esc(e.tocoach)}</div>` : '';
   return `<div class="card ${o.coach && isLow(e) ? 'low' : ''} ${o.open ? 'open' : ''}" data-id="${e.id}">
-    <div class="date"><span>${o.who ? `${esc(o.who)}　` : ''}${jdate(e.date)}${M ? ' <span class="tag match">MATCH</span>' : ''}</span>${o.tag || ''}</div>
+    <div class="date"><span>${o.who ? `${esc(o.who)}　` : ''}${jdate(e.date)}${M ? ' <span class="tag match">MATCH</span>' : ''}</span><span>${o.tag || ''}${o.coach || e._wait ? '' : starBtn(e)}</span></div>
     <div class="kv"><span class="k">FOCUS　今日意識すること</span>${esc(e.focus)}</div>
     ${M ? `<div class="kv"><span class="k">MATCH　相手と結果</span>${esc(e.opp)}</div>` : ''}
     <div class="nums">意識できた <b>${e.n1}</b>　体 <b>${e.n2}</b>　気持ち <b>${e.n3}</b>${M ? `　出来 <b>${e.n4}</b>` : ''}</div>
@@ -420,15 +429,49 @@ function entryHTML(e, o) {
 function bindCards() {
   document.querySelectorAll('.toggle').forEach(b => b.onclick = () => { const c = b.closest('.card'); c.classList.toggle('open'); b.textContent = c.classList.contains('open') ? '閉じる' : '全部の中身を見る'; });
 }
-function renderHistory() {
-  const list = allEntries();
-  S.justSeen = unseen().map(rkey);
-  const body = list.length ? list.map(e => {
+/* ---- これまで：全部／気づき・検索・☆ ---- */
+const starBtn = e => `<button class="starb ${e.star ? 'on' : ''}" data-star="${e.id}" aria-label="☆">${e.star ? '★' : '☆'}</button>`;
+/* 自分で考えたこと・気づいたことの欄 */
+const INS = [['heard', '言われたこと・気づいたこと'], ['bad', 'うまくいかなかった・なぜ'], ['mbad', '課題（どの場面で・なぜ）'], ['tbad', 'チームに足りなかったところ'], ['mprac', '練習で取り組みたいこと'], ['next', 'NEXT　次にどうする']];
+const hl = t => { const q = S.hq.trim(); const x = esc(t); if (!q) return x; const qq = esc(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); return x.replace(new RegExp(qq, 'gi'), m => `<mark>${m}</mark>`); };
+const hasQ = t => { const q = S.hq.trim().toLowerCase(); return !q || String(t || '').toLowerCase().includes(q); };
+const entryText = e => [...TEXT_KEYS.map(k => e[k] || ''), ...repliesFor(e.id).map(r => r.text)].join('\n');
+function insightHTML(e) {
+  const rows = INS.filter(([k]) => e[k] && hasQ(e[k]));
+  if (!rows.length) return '';
+  return `<div class="card ins"><div class="date"><span>${jdate(e.date)}${e.type === 'match' ? ' <span class="tag match">MATCH</span>' : ''}</span><span>${e._wait ? '<span class="tag wait">送信待ち</span>' : starBtn(e)}</span></div>
+    ${rows.map(([k, l]) => `<div class="kv"><span class="k">${l}</span>${hl(e[k])}</div>`).join('')}</div>`;
+}
+function historyList() {
+  let list = allEntries(); if (S.starOnly) list = list.filter(e => e.star);
+  const q = S.hq.trim();
+  if (S.hmode === 'note') { const h = list.map(insightHTML).filter(Boolean); return h.length ? h.join('') : `<p class="mini center" style="margin-top:30px">${q || S.starOnly ? '当てはまるものがありません' : '「気づいたこと」「うまくいかなかった・なぜ」「NEXT」などを書くと、ここにたまります'}</p>`; }
+  if (q) list = list.filter(e => hasQ(entryText(e)));
+  return list.length ? list.map(e => {
     const rs = repliesFor(e.id); const fresh = rs.some(r => S.justSeen.includes(rkey(r)));
-    return entryHTML(e, { replies: rs, tag: e._wait ? '<span class="tag wait">送信待ち</span>' : fresh ? '<span class="tag">NEW</span>' : '' });
-  }).join('') : '<p class="mini center" style="margin-top:40px">まだ記録がありません。「今日の記録」から書いてみよう</p>';
-  shell(S.name, `<div class="list">${body}</div><div class="foot"><button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);
-  bindCards(); bindFoot();
+    return entryHTML(e, { replies: rs, open: !!q, tag: e._wait ? '<span class="tag wait">送信待ち</span>' : fresh ? '<span class="tag">NEW</span>' : '' });
+  }).join('') : `<p class="mini center" style="margin-top:30px">${q || S.starOnly ? '当てはまるものがありません' : 'まだ記録がありません。「今日の記録」から書いてみよう'}</p>`;
+}
+function bindHistoryList() {
+  bindCards();
+  document.querySelectorAll('.starb').forEach(b => b.onclick = async ev => {
+    ev.stopPropagation(); const id = b.dataset.star; const e = S.entries.find(x => x.id === id); if (!e) return;
+    const v = !e.star; e.star = v; save(); refreshList();
+    try { await api('star', { key: S.key, entryId: id, star: v }); }
+    catch (err) { e.star = !v; save(); refreshList(); toast(err.server ? err.message : 'ネットにつながっていません。つながってからもう一度'); }
+  });
+  if (S.hq.trim() && S.hmode === 'all') document.querySelectorAll('#hlist .kv').forEach(k => { const t = k.lastChild; if (t && t.nodeType === 3 && hasQ(t.textContent) && S.hq.trim()) { const sp = document.createElement('span'); sp.innerHTML = hl(t.textContent); k.replaceChild(sp, t); } });
+}
+function refreshList() { const el = $('#hlist'); if (!el) return; el.innerHTML = historyList(); bindHistoryList(); }
+function renderHistory() {
+  S.justSeen = unseen().map(rkey);
+  shell(S.name, `<div class="hctl"><div class="seg"><button data-hm="all" class="${S.hmode === 'all' ? 'on' : ''}">全部</button><button data-hm="note" class="${S.hmode === 'note' ? 'on' : ''}">気づき</button></div>
+    <div class="srow"><input id="hq" type="search" placeholder="言葉でさがす（例：サーブ）" value="${esc(S.hq)}"><button class="stoggle ${S.starOnly ? 'on' : ''}" id="sonly">★だけ</button></div></div>
+    <div class="list" id="hlist">${historyList()}</div><div class="foot"><button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);
+  bindHistoryList(); bindFoot();
+  document.querySelectorAll('[data-hm]').forEach(b => b.onclick = () => { S.hmode = b.dataset.hm; store.set('hmode', S.hmode); renderHistory(); });
+  $('#sonly').onclick = () => { S.starOnly = !S.starOnly; $('#sonly').classList.toggle('on', S.starOnly); refreshList(); };
+  $('#hq').addEventListener('input', ev => { S.hq = ev.target.value; refreshList(); });
   S.seen = [...new Set([...S.seen, ...S.justSeen])]; save();
 }
 function bindFoot() {

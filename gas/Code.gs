@@ -9,7 +9,7 @@ const PROP_ID = 'PN_SHEET_ID';
 const COLS = {
   members: ['合言葉', 'id', '名前', '役割', '初回', '学年'],
   entries: ['id', 'uid', 'date', 'type', 'focus', 'opp', 'n1', 'n2', 'n3', 'n4', 'r1', 'r2', 'r3', 'r4',
-            'good', 'bad', 'heard', 'mgood', 'mbad', 'tgood', 'tbad', 'mprac', 'tocoach', 'next', 'at', 'received'],
+            'good', 'bad', 'heard', 'mgood', 'mbad', 'tgood', 'tbad', 'mprac', 'tocoach', 'next', 'at', 'received', 'star'],
   replies: ['id', 'entryId', 'text', 'at', 'by', 'byId', 'edited'],
   notices: ['id', 'to', 'text', 'at', 'by', 'byId', 'edited', 'targets'],
   reads: ['noticeId', 'uid', 'at'],
@@ -137,6 +137,19 @@ function handle_(b) {
       return { ok: false, error: '返事が見つかりません' };
     });
   }
+  if (a === 'star' && !coach) {
+    return withLock_(() => {
+      const sh = book.getSheetByName(SHEET.entries); const v = sh.getDataRange().getValues(); const h = v[0];
+      const ci = name => h.indexOf(name);
+      for (let i = 1; i < v.length; i++) {
+        if (String(v[i][ci('id')]) !== String(b.entryId)) continue;
+        if (String(v[i][ci('uid')]) !== user.id) return { ok: false, error: '自分の記録だけに印を付けられます' };
+        sh.getRange(i + 1, ci('star') + 1).setValue(b.star ? '1' : '');
+        return { ok: true };
+      }
+      return { ok: false, error: '記録が見つかりません' };
+    });
+  }
   if (a === 'readNotices' && !coach) {
     const ids = (b.ids || []).map(String).slice(0, 200);
     return withLock_(() => {
@@ -256,6 +269,7 @@ function clean_(r) {
   const o = {}; COLS.entries.forEach(c => { if (c !== 'uid' && c !== 'received') o[c] = r[c]; });
   ['n1', 'n2', 'n3', 'n4'].forEach(k => o[k] = o[k] === '' ? 0 : Number(o[k]));
   ['id', 'date', 'type', 'at'].forEach(k => o[k] = String(o[k]));
+  o.star = String(o.star || '') === '1';
   return o;
 }
 function cleanR_(r) { return { id: String(r.id), entryId: String(r.entryId), text: String(r.text).replace(/^'/, ''), at: String(r.at), by: String(r.by || '佐藤'), byId: String(r.byId || ''), edited: String(r.edited || '') }; }
