@@ -673,9 +673,18 @@ function renderCoachReports() {
     const m = list[0].d.match; const who = list.filter(r => r.uid !== 'team').map(r => (mem.find(x => x.id === r.uid) || {}).name || '？');
     return `<div class="card"><div class="date"><span>${esc(m.title)}　<span class="mini">${esc(jdate(m.date))}</span></span></div>
       <div class="mini">送った相手：${who.map(esc).join('・') || 'なし'}${list.some(r => r.uid === 'team') ? '＋チーム版（全員）' : ''}</div>
+      <div class="rbtns" style="flex-wrap:wrap">${list.filter(r => r.uid !== 'team').map(r => `<button class="mini-btn cview" data-mid="${esc(r.matchId)}" data-uid="${esc(r.uid)}">${esc((mem.find(x => x.id === r.uid) || {}).name || '？')}</button>`).join('')}${list.some(r => r.uid === 'team') ? `<button class="mini-btn cview" data-mid="${esc(list[0].matchId)}" data-uid="team">チーム版</button>` : ''}</div>
       <div class="rbtns"><button class="mini-btn del rdel" data-mid="${esc(list[0].matchId)}">この試合のレポートを消す</button></div></div>`;
   }).join('');
-  shell('顧問用　' + S.name, `${impHTML}<div class="h"><span class="en">SENT</span><span class="ja">送ったレポート</span></div><div class="list">${sentHTML || '<p class="mini center">まだ送っていません</p>'}</div>
+  const V = S.cview && reps.find(r => r.matchId === S.cview.mid && r.uid === S.cview.uid);
+  let viewHTML = '';
+  if (V) {
+    const own = reps.filter(r => r.uid === V.uid).sort((a, b) => (b.d.match.date || '').localeCompare(a.d.match.date || '') || Date.parse(b.at) - Date.parse(a.at));
+    const nm = V.uid === 'team' ? 'チーム版' : ((mem.find(x => x.id === V.uid) || {}).name || '？') + 'の画面';
+    viewHTML = `<div class="h" id="cviewh"><span class="en">VIEW</span><span class="ja">${esc(nm)}　${esc(V.d.match.title)}</span></div><button class="link" id="cvclose">閉じる</button>` +
+      (V.uid === 'team' ? blocksHTML(V.d.sections) : playerReportHTML(V, prevOf(V, own), null)) + '<button class="link" id="cvclose2" style="margin-top:10px">閉じる</button>';
+  }
+  shell('顧問用　' + S.name, `${impHTML}<div class="h"><span class="en">SENT</span><span class="ja">送ったレポート</span></div><div class="mini">名前を押すと、その部員の画面で見られます</div><div class="list">${sentHTML || '<p class="mini center">まだ送っていません</p>'}</div>${viewHTML}
     <div class="foot"><button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);
   const f = $('#rfile'); if (f) f.onchange = async () => {
     const file = f.files[0]; if (!file) return;
@@ -704,6 +713,8 @@ function renderCoachReports() {
     try { await api('deleteReports', { key: S.key, matchId: mid }); S.cd.reports = (S.cd.reports || []).filter(r => r.matchId !== mid); store.set('cd', S.cd); toast('消しました'); render(); }
     catch (e) { b.disabled = false; toast(e.server ? e.message : 'ネットにつながっていません'); }
   });
+  document.querySelectorAll('.cview').forEach(b => b.onclick = () => { S.cview = { mid: b.dataset.mid, uid: b.dataset.uid }; render(); const h = $('#cviewh'); if (h) window.scrollTo(0, h.getBoundingClientRect().top + window.scrollY - 120); });
+  ['#cvclose', '#cvclose2'].forEach(q => { const x = $(q); if (x) x.onclick = () => { S.cview = null; render(); }; });
   bindFoot(); if (I && I.view != null) { const h = document.querySelectorAll('.h'); const last = [...h].find(x => x.textContent.includes('PREVIEW')); if (last) last.scrollIntoView(); }
 }
 
