@@ -248,9 +248,10 @@ async function flush() {
     catch (err) { if (err.server) { /* 受け口が断った */ } break; }
   }
 }
+const clearLocal = () => ['key', 'name', 'role', 'needSet', 'me', 'entries', 'replies', 'outbox', 'seen', 'draft', 'cd', 'notices', 'seenN', 'reportedN', 'reports', 'seenRep'].forEach(k => store.del(k));
 function forgetIfBadKey(e) {
   if (e && e.server && /先に自分の合言葉/.test(e.message || '')) { S.needSet = true; store.set('needSet', true); render(); return; }
-  if (e && e.server && /合言葉/.test(e.message || '')) { ['key', 'name', 'role', 'needSet', 'me', 'entries', 'replies', 'outbox', 'seen', 'draft', 'cd', 'notices', 'seenN', 'reportedN', 'reports', 'seenRep'].forEach(k => store.del(k)); location.reload(); }
+  if (e && e.server && /合言葉/.test(e.message || '')) { clearLocal(); location.reload(); }
 }
 async function refresh() {
   if (S.role === 'coach') {
@@ -308,7 +309,9 @@ function renderSetKey(err) {
   <div class="q">合言葉</div><input id="nk1" autocomplete="off" autocapitalize="off" spellcheck="false">
   <div class="q">もう一度</div><input id="nk2" autocomplete="off" autocapitalize="off" spellcheck="false">
   ${err ? `<div class="err">${esc(err)}</div>` : ''}</div>
-  <button class="btn" id="setk">決める</button></div>`);
+  <button class="btn" id="setk">決める</button>
+  <div class="foot"><button class="link" id="other">別の合言葉で入る</button></div></div>`);
+  $('#other').onclick = () => { if (!confirm('この合言葉をやめて、合言葉を入れる画面にもどります。よいですか？')) return; clearLocal(); location.reload(); };
   $('#setk').onclick = async () => {
     const a = $('#nk1').value.trim(), b = $('#nk2').value.trim();
     if (a.length < 4 || a.length > 30 || /\s/.test(a)) return renderSetKey('4〜30文字、空白なしで決めてください');
@@ -484,7 +487,7 @@ function renderHistory() {
 }
 function bindFoot() {
   const r = $('#reload'); if (r) r.onclick = async () => { toast((await refresh()) ? '最新にしました' : 'ネットにつながっていません'); render(); };
-  const l = $('#logout'); if (l) l.onclick = () => { if (!confirm('この端末から合言葉と記録の控えを消します。もう一度使うときは合言葉を入れ直します。よいですか？')) return; ['key', 'name', 'role', 'needSet', 'me', 'entries', 'replies', 'outbox', 'seen', 'draft', 'cd', 'notices', 'seenN', 'reportedN', 'reports', 'seenRep'].forEach(k => store.del(k)); location.reload(); };
+  const l = $('#logout'); if (l) l.onclick = () => { if (!confirm('この端末から合言葉と記録の控えを消します。もう一度使うときは合言葉を入れ直します。よいですか？')) return; clearLocal(); location.reload(); };
 }
 
 /* ===== 顧問用 ===== */
