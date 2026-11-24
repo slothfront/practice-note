@@ -83,6 +83,7 @@ textarea:focus,input:focus{outline:0;border-color:var(--main)}
 .coach .en{color:var(--main)}
 .demo{background:var(--acc2)}
 </style><style>:root{--main:#22B3A6;--ink2:#1F4E79;--acc2:#FFE27A;--soft:#E3F7F4;--line2:#D3ECE8;--bg:#F3FBFA;--btn:#22B3A6;--btntext:#fff;--btnshadow:#178C82}.seg{display:flex;background:#fff;border-radius:999px;padding:4px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin:4px 0 6px}
+.dpick{margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px}.dpick input{width:auto;flex:0 0 auto;margin:0;font-size:16px;padding:8px 10px}.dpick .dlab{font-weight:700;font-size:14px}.dpick.past{border-left:6px solid var(--acc2)}.dpick .link{margin-left:auto}
 .seg button{flex:1;border:0;background:none;border-radius:999px;padding:10px 0;font:inherit;font-size:15px;font-weight:700;color:var(--gray)}
 .seg button.on{background:var(--main,#1F4E79);color:#fff}
 .tag.match{background:var(--ink2,#1F4E79);color:#fff;font-style:normal}
@@ -252,7 +253,9 @@ async function reportReads() {
 }
 const rkey = r => r.edited ? `${r.id}@${r.edited}` : r.id;
 const unseen = () => S.replies.filter(r => !S.seen.includes(rkey(r)));
-const lastNext = () => { const e = allEntries()[0]; return e ? e.next || '' : ''; };
+const lastNext = (date) => { const e = (!date || date >= today()) ? allEntries()[0] : allEntries().find(x => x.date < date); return e ? e.next || '' : ''; };
+/* あとから書いた記録（記入した日が記録の日より後）に小さく「○/○に記入」 */
+const lateMark = e => { if (!e.at) return ''; const w = localDate(e.at); if (!(w > e.date)) return ''; const [, m, d] = w.split('-').map(Number); return ` <span class="mini">（${m}/${d}に記入）</span>`; };
 
 /* ===== 同期 ===== */
 async function flush() {
@@ -351,7 +354,7 @@ const MQ = [['mgood', 'よかったプレー・できるようになったこと
   ['tgood', 'チームのよかったところ', ''], ['tbad', 'チームに足りなかったところ', ''],
   ['mprac', '練習で取り組みたいこと', '']];
 const TEXT_KEYS = ['focus', 'good', 'bad', 'heard', 'next', 'r1', 'r2', 'r3', 'r4', 'opp', 'mgood', 'mbad', 'tgood', 'tbad', 'mprac', 'tocoach'];
-function blankDraft() { const d = { date: today(), type: 'practice', focus: lastNext(), n1: 0, n2: 0, n3: 0, n4: 0 }; TEXT_KEYS.forEach(k => { if (!(k in d)) d[k] = ''; }); d.focus = lastNext(); return d; }
+function blankDraft(date) { const d = { date: date || today(), type: 'practice', n1: 0, n2: 0, n3: 0, n4: 0 }; TEXT_KEYS.forEach(k => { if (!(k in d)) d[k] = ''; }); d.focus = lastNext(d.date); if (date) d.pick = true; return d; }
 function saveDraft() {
   if (S.tab !== 'today' || !$('#focus')) return;
   const d = S.draft || blankDraft();
@@ -359,17 +362,19 @@ function saveDraft() {
   S.draft = d; store.set('draft', d);
 }
 function renderToday() {
-  if (!S.draft || S.draft.date !== today()) S.draft = blankDraft();
+  /* 日付を選んで書いている下書き（pick）は日をまたいでも残す。そうでなければ毎日新しく */
+  if (!S.draft || (!S.draft.pick && S.draft.date !== today()) || S.draft.date > today()) S.draft = blankDraft();
   const d = S.draft; TEXT_KEYS.forEach(k => { if (d[k] == null) d[k] = ''; }); if (!d.type) d.type = 'practice';
   const M = d.type === 'match';
-  const done = allEntries().filter(e => e.date === today()).length;
+  const past = d.date < today();
+  const done = allEntries().filter(e => e.date === d.date).length;
   const nums = (M ? FM : F).map(([n, l, r]) => `<div class="row" data-row="${n}"><span class="lab">${l}</span>${[1, 2, 3, 4, 5].map(i => `<button class="dot ${d[n] === i ? 'on' : ''}" data-n="${n}" data-v="${i}" aria-label="${l} ${i}">${i}</button>`).join('')}</div>` +
     (d[n] && d[n] <= 2 ? `<div class="why"><input id="${r}" placeholder="理由を一言" value="${esc(d[r])}"></div>` : '')).join('');
   const review = M ? `
   <div class="h"><span class="en">MATCH REVIEW</span><span class="ja">試合のふり返り</span></div><div class="hint">全部書く。場面と「なぜ」を入れて</div>
   ${MQ.map(([k, q, h]) => `<div class="q">${q}${h ? `<span class="mini">（${h}）</span>` : ''}</div><textarea id="${k}">${esc(d[k])}</textarea>`).join('')}` : `
   <div class="h"><span class="en">REVIEW</span><span class="ja">ふり返り</span></div><div class="hint">書けるものだけでOK</div>
-  <div class="q">今日よかったプレー</div><textarea id="good">${esc(d.good)}</textarea>
+  <div class="q">${past ? 'この日よかったプレー' : '今日よかったプレー'}</div><textarea id="good">${esc(d.good)}</textarea>
   <div class="q">うまくいかなかったこと・その理由</div><textarea id="bad">${esc(d.bad)}</textarea>
   <div class="q">誰かに言われたこと・気づいたこと</div><textarea id="heard">${esc(d.heard)}</textarea>`;
   const nNew = unseenN();
@@ -378,10 +383,12 @@ function renderToday() {
   ${noticeBlock}
   ${lastMatchCard()}
   ${S.outbox.length ? `<div class="pending">送信待ち ${S.outbox.length}件。ネットにつながったら自動で送ります</div>` : ''}
-  ${done ? `<div class="mini">今日はもう${done}回提出しています。もう一度出すと、もう1件追加されます</div>` : ''}
+  <div class="h" style="margin-top:4px"><span class="en">DATE</span><span class="ja">記録する日</span></div><div class="hint">書き忘れた日は、日付を変えるとあとから書けます</div>
+  <div class="card dpick ${past ? 'past' : ''}"><input type="date" id="edate" value="${d.date}" max="${today()}"><span class="dlab">${past ? `${jdate(d.date)}の記録` : '今日の記録'}</span>${past ? '<button class="link" id="dtoday">今日にもどす</button>' : ''}</div>
+  ${done ? `<div class="mini">${past ? 'この日' : '今日'}はもう${done}回提出しています。もう一度出すと、もう1件追加されます</div>` : ''}
   <div class="seg"><button data-type="practice" class="${M ? '' : 'on'}">練習</button><button data-type="match" class="${M ? 'on' : ''}">試合</button></div>
-  <div class="h"><span class="en">TODAY'S FOCUS</span><span class="ja">今日意識すること</span></div><div class="hint">前回のNEXTが入っています。変えてもよい</div>
-  <textarea id="focus" class="${d.focus && d.focus === lastNext() ? 'prefill' : ''}" placeholder="今日意識すること">${esc(d.focus)}</textarea>
+  <div class="h"><span class="en">${past ? 'FOCUS' : "TODAY'S FOCUS"}</span><span class="ja">${past ? 'この日意識したこと' : '今日意識すること'}</span></div><div class="hint">前回のNEXTが入っています。変えてもよい</div>
+  <textarea id="focus" class="${d.focus && d.focus === lastNext(d.date) ? 'prefill' : ''}" placeholder="${past ? 'この日意識したこと' : '今日意識すること'}">${esc(d.focus)}</textarea>
   ${M ? `<div class="h"><span class="en">MATCH</span><span class="ja">試合</span></div><div class="hint">相手と結果。例：令徳 1-2、木更津東 2-0</div>
   <input id="opp" placeholder="相手と結果" value="${esc(d.opp)}">` : ''}
   <div class="h"><span class="en">NUMBERS</span><span class="ja">数字（1〜5）</span></div><div class="hint">押すだけ。1・2を押したら理由を一言</div>
@@ -397,6 +404,14 @@ function renderToday() {
   document.querySelectorAll('.seg button').forEach(b => b.onclick = () => { saveDraft(); d.type = b.dataset.type; store.set('draft', d); renderToday(); });
   document.querySelectorAll('textarea,input').forEach(el => el.addEventListener('input', () => { el.classList.remove('miss'); saveDraft(); }));
   $('#submit').onclick = submit;
+  const setDate = v => {
+    saveDraft(); if (!v || v > today()) { renderToday(); return; }
+    const was = lastNext(d.date); d.date = v; d.pick = v !== today();
+    if (!d.focus.trim() || d.focus === was) d.focus = lastNext(v);
+    store.set('draft', d); renderToday();
+  };
+  $('#edate').addEventListener('change', e => setDate(e.target.value));
+  const dt = $('#dtoday'); if (dt) dt.onclick = () => setDate(today());
   const tr = $('#toRep'); if (tr) tr.onclick = () => go('report');
   const tn = $('#toN'); if (tn) tn.onclick = () => go('snotice');
 }
@@ -409,6 +424,7 @@ async function submit() {
   (M ? FM : F).forEach(([n]) => { if (!d[n]) miss.push(`.row[data-row=${n}]`); });
   if (M) MQ.forEach(([k]) => { if (!d[k].trim()) miss.push('#' + k); });
   if (!d.next.trim()) miss.push('#next');
+  if (d.date > today()) { toast('先の日付には書けません'); return; }
   if (miss.length) {
     miss.forEach(q => { const el = $(q); if (el) el.classList.add('miss'); });
     const first = $(miss[0]); if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -443,7 +459,7 @@ function entryHTML(e, o) {
       ${M ? MQ.map(([k, q]) => e[k] ? `<div class="kv"><span class="k">${q}</span>${esc(e[k])}</div>` : '').join('') : ''}`;
   const toc = e.tocoach ? `<div class="kv tocoach"><span class="k">顧問に伝えたいこと</span>${esc(e.tocoach)}</div>` : '';
   return `<div class="card ${o.coach && isLow(e) ? 'low' : ''} ${o.open ? 'open' : ''}" data-id="${e.id}">
-    <div class="date"><span>${o.who ? `${esc(o.who)}　` : ''}${jdate(e.date)}${M ? ' <span class="tag match">MATCH</span>' : ''}</span><span>${o.tag || ''}${o.coach || e._wait ? '' : starBtn(e)}</span></div>
+    <div class="date"><span>${o.who ? `${esc(o.who)}　` : ''}${jdate(e.date)}${M ? ' <span class="tag match">MATCH</span>' : ''}${lateMark(e)}</span><span>${o.tag || ''}${o.coach || e._wait ? '' : starBtn(e)}</span></div>
     <div class="kv"><span class="k">FOCUS　今日意識すること</span>${esc(e.focus)}</div>
     ${M ? `<div class="kv"><span class="k">MATCH　相手と結果</span>${esc(e.opp)}</div>` : ''}
     <div class="nums">意識できた <b>${e.n1}</b>　体の調子 <b>${e.n2}</b>　気持ち <b>${e.n3}</b>${M ? `　出来 <b>${e.n4}</b>` : ''}</div>
@@ -467,7 +483,7 @@ const entryText = e => [...TEXT_KEYS.map(k => e[k] || ''), ...repliesFor(e.id).m
 function insightHTML(e) {
   const rows = INS.filter(([k]) => e[k] && hasQ(e[k]));
   if (!rows.length) return '';
-  return `<div class="card ins"><div class="date"><span>${jdate(e.date)}${e.type === 'match' ? ' <span class="tag match">MATCH</span>' : ''}</span><span>${e._wait ? '<span class="tag wait">送信待ち</span>' : starBtn(e)}</span></div>
+  return `<div class="card ins"><div class="date"><span>${jdate(e.date)}${e.type === 'match' ? ' <span class="tag match">MATCH</span>' : ''}${lateMark(e)}</span><span>${e._wait ? '<span class="tag wait">送信待ち</span>' : starBtn(e)}</span></div>
     ${rows.map(([k, l]) => `<div class="kv"><span class="k">${l}</span>${hl(e[k])}</div>`).join('')}</div>`;
 }
 function historyList() {
