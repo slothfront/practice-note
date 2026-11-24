@@ -4,6 +4,8 @@
  * 2) 表の「部員」シートに名前を書く（先生はD列に coach・部員はF列に学年の数字 1／2／3）→ makeKeys を実行すると「はじめの合言葉」が入る（E列＝はじめ）
  *    はじめの合言葉で開くと、アプリが自分の合言葉を決めさせる。忘れた人は、A列を書き換えてE列に「はじめ」と書けば、もう一度決め直せる
  * 3) デプロイ → 新しいデプロイ → 種類「ウェブアプリ」・実行ユーザー「自分」・アクセス「全員」→ URLをアプリに貼る
+ * 4) 自動更新：makeUpdateToken を1回実行し、ログに出た文字を GitHub の Secrets「GAS_UPDATE_TOKEN」へ。
+ *    以後は GitHub の main の gas/ が変わると、GitHub Actions の合図でこのスクリプトが自分を入れ替える（selfUpdate_）
  */
 const PROP_ID = 'PN_SHEET_ID';
 const COLS = {
@@ -16,9 +18,10 @@ const COLS = {
   reports: ['id', 'matchId', 'uid', 'at', 'by', 'j1', 'j2', 'j3', 'j4', 'j5', 'j6', 'j7', 'j8'],
   jumps: ['id', 'uid', 'date', 'stand', 'run', 'reach', 'at', 'by'],
   cnotes: ['id', 'uid', 'text', 'at', 'by', 'byId', 'edited'],
-  creads: ['noteId', 'uid', 'at']
+  creads: ['noteId', 'uid', 'at'],
+  updates: ['at', 'sha', 'result']
 };
-const SHEET = { members: '部員', entries: '記録', replies: '返事', notices: 'お知らせ', reads: '既読', reports: 'レポート', jumps: 'ジャンプ', cnotes: '顧問メモ', creads: '顧問既読' };
+const SHEET = { members: '部員', entries: '記録', replies: '返事', notices: 'お知らせ', reads: '既読', reports: 'レポート', jumps: 'ジャンプ', cnotes: '顧問メモ', creads: '顧問既読', updates: '更新' };
 const CHUNK = 40000;  // 1マスに入れる文字数（表の1マスは5万文字まで）
 
 function setupPracticeNote() {
@@ -68,6 +71,11 @@ function doGet() { return json_({ ok: true, app: 'PRACTICE NOTE' }); }
 function handle_(b) {
   const book = book_();
   ensureColumns_(book);
+  if (b.action === 'selfUpdate') {
+    const t = PropertiesService.getScriptProperties().getProperty(UPDATE_PROP);
+    if (!t || String(b.token || '') !== t) return { ok: false, error: '合図がちがいます' };
+    return selfUpdate_(book, false, String(b.sha || ''));
+  }
   const user = findUser_(book, b.key);
   if (!user) return { ok: false, error: '合言葉がちがいます' };
   const coach = user.role === 'coach';
@@ -376,3 +384,66 @@ function forUser_(n, user) { const to = String(n.to); if (to === 'all' || to ===
 function clip_(s) { s = String(s); if (/^[=+@]/.test(s)) s = "'" + s; return s.slice(0, 4000); }
 function withLock_(fn) { const l = LockService.getScriptLock(); l.waitLock(15000); try { return fn(); } finally { l.releaseLock(); } }
 function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
+
+/* ===== 自動更新：GitHub の main（gas/Code.gs・gas/appsscript.json）→ このスクリプト ===== */
+const REPO = 'slothfront/practice-note';
+const DEPLOY_ID = 'AKfycbxONTyT55jOqV12OJ_zWSkl8_twA-D3VZa05XI5MdI6baa14Qw06jIdtZdWlyLu8OE2';  // アプリの GAS_URL の /s/ と /exec の間
+const UPDATE_PROP = 'PN_UPDATE_TOKEN';
+const DEPLOYED_PROP = 'PN_DEPLOYED_SHA';
+
+/** 最初に1回だけ実行：合図用の合言葉を作る。ログに出た文字を GitHub の Secrets「GAS_UPDATE_TOKEN」に入れる */
+function makeUpdateToken() {
+  const t = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '');
+  PropertiesService.getScriptProperties().setProperty(UPDATE_PROP, t);
+  ScriptApp.getOAuthToken(); UrlFetchApp.getRequest('https://api.github.com/');  // 許可の画面をここで出しておく
+  Logger.log('GitHub の Secrets「GAS_UPDATE_TOKEN」に、次の1行をそのまま入れてください\n' + t);
+}
+/** 手で更新したいとき（GitHub Actions が失敗したときなど）にエディタから実行 */
+function updateFromGitHub() { Logger.log(JSON.stringify(selfUpdate_(book_(), true))); }
+
+function selfUpdate_(book, force, shaIn) {
+  const props = PropertiesService.getScriptProperties();
+  let sha = '';
+  const done = (ok, msg) => {
+    try { book.getSheetByName(SHEET.updates).appendRow([new Date().toISOString(), sha.slice(0, 7), msg]); } catch (e) {}
+    return { ok, sha: sha.slice(0, 7), result: msg };
+  };
+  try {
+    const gh = u => UrlFetchApp.fetch(u, { muteHttpExceptions: true, headers: { 'User-Agent': 'practice-note-gas' } });
+    /* GitHub Actions は main のコミット番号を渡してくる。手で動かしたときだけ GitHub に聞く */
+    if (/^[0-9a-f]{40}$/.test(shaIn || '')) sha = shaIn;
+    else {
+      const c = gh('https://api.github.com/repos/' + REPO + '/commits/main');
+      if (c.getResponseCode() !== 200) return done(false, 'GitHubに届きません（' + c.getResponseCode() + '）');
+      sha = String(JSON.parse(c.getContentText()).sha || '');
+    }
+    if (!force && props.getProperty(DEPLOYED_PROP) === sha) return done(true, '変更なし');
+    const raw = path => {
+      const r = gh('https://raw.githubusercontent.com/' + REPO + '/' + sha + '/' + path);
+      if (r.getResponseCode() !== 200) throw new Error(path + ' が読めません（' + r.getResponseCode() + '）');
+      return r.getContentText();
+    };
+    const code = raw('gas/Code.gs'), manifest = raw('gas/appsscript.json');
+    try { new Function(code); JSON.parse(manifest); } catch (e) { return done(false, '入れ替えない：コードの形がちがう（' + e.message + '）'); }
+    if (code.indexOf('function selfUpdate_(') < 0) return done(false, '入れ替えない：自動更新の仕組みが入っていないコード');
+    const api = (method, path, body) => {
+      const o = { method, headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true };
+      if (body) { o.contentType = 'application/json'; o.payload = JSON.stringify(body); }
+      const r = UrlFetchApp.fetch('https://script.googleapis.com/v1/projects/' + ScriptApp.getScriptId() + path, o);
+      const j = JSON.parse(r.getContentText() || '{}');
+      if (r.getResponseCode() >= 300) throw new Error('Apps Script API ' + r.getResponseCode() + '：' + ((j.error && j.error.message) || ''));
+      return j;
+    };
+    const cur = api('get', '/content');
+    /* スクリプトのファイル（コード.gs など名前がちがっても）は全部この1枚に置きかえる。HTMLがあれば残す */
+    const files = (cur.files || []).filter(f => f.type === 'HTML')
+      .concat([{ name: 'Code', type: 'SERVER_JS', source: code }, { name: 'appsscript', type: 'JSON', source: manifest }]);
+    api('put', '/content', { files });
+    const v = api('post', '/versions', { description: 'GitHub ' + sha.slice(0, 7) });
+    api('put', '/deployments/' + DEPLOY_ID, { deploymentConfig: { versionNumber: v.versionNumber, manifestFileName: 'appsscript', description: 'GitHub ' + sha.slice(0, 7) } });
+    props.setProperty(DEPLOYED_PROP, sha);
+    return done(true, '入れ替えました（バージョン ' + v.versionNumber + '）');
+  } catch (e) {
+    return done(false, '失敗：' + String(e && e.message || e));
+  }
+}

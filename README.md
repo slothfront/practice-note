@@ -35,6 +35,7 @@
 - `sw.js`：電波が無くても開けるようにする仕組み（サービスワーカー）。記録の送受信には触らない
 - `manifest.webmanifest`・アイコン類：ホーム画面に追加したときの名前と絵
 - `gas/Code.gs`：記録をためるGoogleの表とのやり取り（Google Apps Script）
+- `gas/appsscript.json`：GASの設定（タイムゾーン・ウェブアプリの公開範囲・使う許可）
 
 ## しくみ
 
@@ -42,6 +43,18 @@
 - **GAS＋Googleの表**：記録・返事・お知らせなどをためる。合言葉の確かめもここ。
   シート＝部員・記録・返事・お知らせ・既読・レポート・ジャンプ・顧問メモ・顧問既読（足りないシートや列は呼ばれたときに自動で作る）
 - `index.html` の `GAS_URL` が空のあいだは見本モード（端末の中だけで動く）
+
+### GASの自動更新
+
+`main` の `gas/`（`Code.gs`・`appsscript.json`）が変わると、GitHub Actions（`.github/workflows/gas-update.yml`）がGASに合図し、
+GASが同じコミットのコードを自分で取り込んで、新しいバージョンでデプロイし直す（`selfUpdate_`・URLは変わらない）。
+結果は表の「更新」シートに1行ずつ残る。形のおかしいコードや、自動更新の仕組みが入っていないコードには入れ替えない。
+
+- 合図の合言葉：GASの `makeUpdateToken` を実行 → ログの1行を GitHub の Secrets「GAS_UPDATE_TOKEN」へ
+- 手で取り込むとき：GASのエディタで `updateFromGitHub` を実行
+- 戻すとき：「デプロイを管理」で前のバージョンを選ぶ
+- 使う許可（`appsscript.json` の `oauthScopes`）を増やすときは、自動では許可されないので、エディタで1回実行して許可する
+- 前提：[Apps Scriptの設定](https://script.google.com/home/usersettings)で「Google Apps Script API」がオン。バージョンは1つのスクリプトで200まで
 
 ### GASを入れ直すとき
 
