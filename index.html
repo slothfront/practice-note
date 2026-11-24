@@ -373,7 +373,7 @@ function renderToday() {
   <div class="q">うまくいかなかったのは？なぜ？</div><textarea id="bad">${esc(d.bad)}</textarea>
   <div class="q">誰かに言われたこと・気づいたことは？</div><textarea id="heard">${esc(d.heard)}</textarea>`;
   const nNew = unseenN();
-  const noticeBlock = nNew.length ? `<button class="notice fresh" id="toN" style="width:100%;text-align:left;font:inherit;cursor:pointer"><div class="date"><span>先生からのお知らせ　<b>${nNew.length}件</b>（まだ「既読にする」を押していません）</span><span class="tag">NEW</span></div><div class="mini">押すとお知らせのタブを開きます</div></button>` : '';
+  const noticeBlock = nNew.length ? `<button class="notice fresh" id="toN" style="width:100%;text-align:left;font:inherit;cursor:pointer"><div class="date"><span>先生からのお知らせ　未読 <b>${nNew.length}件</b></span><span class="tag">未読</span></div><div class="mini">押すとお知らせのタブを開きます</div></button>` : '';
   shell(`${jdate(today())}　${S.name}`, `
   ${noticeBlock}
   ${lastMatchCard()}
@@ -985,14 +985,15 @@ function renderBoard() {
   if (ids.length) api('cnoteRead', { key: S.key, ids }).then(() => { S.cd.creads = [...(S.cd.creads || []), ...ids.map(id => ({ noteId: id, uid: S.me }))]; store.set('cd', S.cd); }).catch(() => {});
 }
 
-/* ===== 部員：お知らせのタブ（「既読にする」を押すまで開いて出す） ===== */
+/* ===== 部員：お知らせのタブ（未読と既読に分ける。「既読にする」で既読へ移る） ===== */
 function renderStudentNotices() {
   const nNew = unseenN().sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   const nOld = S.notices.filter(x => !nNew.includes(x)).sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
-  const nCard = (x, fresh) => `<div class="notice ${fresh ? 'fresh' : ''}"><div class="date"><span>${esc(x.by)}から　<span class="mini">${x.to === 'all' ? '全員へ' : /^grade:/.test(x.to) ? x.to.slice(6) + '年へ' : 'あなたへ'}・${jdate(localDate(x.at))}${x.edited ? '（直しました）' : ''}</span></span>${fresh ? '<span class="tag">NEW</span>' : ''}</div><div class="ntext">${esc(x.text)}</div>${fresh ? `<div class="rbtns"><button class="mini-btn save nok" data-nid="${x.id}">既読にする</button></div>` : ''}</div>`;
-  shell(S.name, `<div class="h" style="margin-top:4px"><span class="en">FROM COACH</span><span class="ja">先生から</span></div>
-    ${nNew.length ? `<div class="hint">読んだら「既読にする」を押してください。押すと下の「前のお知らせ」に移ります</div>${nNew.map(x => nCard(x, true)).join('')}` : '<p class="mini center" style="margin:14px 0">新しいお知らせはありません</p>'}
-    ${nOld.length ? `<div class="h"><span class="en">BEFORE</span><span class="ja">前のお知らせ（${nOld.length}件）</span></div>${nOld.map(x => nCard(x, false)).join('')}` : ''}
+  const nCard = (x, fresh) => `<div class="notice ${fresh ? 'fresh' : ''}"><div class="date"><span>${esc(x.by)}から　<span class="mini">${x.to === 'all' ? '全員へ' : /^grade:/.test(x.to) ? x.to.slice(6) + '年へ' : 'あなたへ'}・${jdate(localDate(x.at))}${x.edited ? '（直しました）' : ''}</span></span>${fresh ? '<span class="tag">未読</span>' : '<span class="mini">既読</span>'}</div><div class="ntext">${esc(x.text)}</div>${fresh ? `<div class="rbtns"><button class="mini-btn save nok" data-nid="${x.id}">既読にする</button></div>` : ''}</div>`;
+  shell(S.name, `<div class="h" style="margin-top:4px"><span class="en">UNREAD</span><span class="ja">未読（${nNew.length}件）</span></div>
+    ${nNew.length ? `<div class="hint">読んだら「既読にする」を押してください。下の「既読」に移ります</div>${nNew.map(x => nCard(x, true)).join('')}` : '<p class="mini center" style="margin:14px 0">未読のお知らせはありません</p>'}
+    <div class="h"><span class="en">READ</span><span class="ja">既読（${nOld.length}件）</span></div>
+    ${nOld.length ? nOld.map(x => nCard(x, false)).join('') : '<p class="mini center" style="margin:14px 0">まだありません</p>'}
     <div class="foot"><button class="link" id="reload">最新にする</button></div>`);
   bindFoot();
   document.querySelectorAll('.nok').forEach(b => b.onclick = async () => {
