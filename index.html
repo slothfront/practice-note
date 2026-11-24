@@ -971,11 +971,16 @@ function bindCnotes(uid) {
 function renderBoard() {
   const list = cnotesOf('board');
   shell('顧問用　' + S.name, `<div class="h" style="margin-top:4px"><span class="en">COACHES</span><span class="ja">顧問の連絡ボード（部員には見えません）</span></div>
-    <div class="card"><textarea id="cnew" placeholder="ほかの先生への連絡・共有したいこと">${esc((S.cDraft || {}).board || '')}</textarea><button class="btn" id="csend" style="margin-top:8px;padding:11px">送る</button></div>
+    <div class="card"><div class="q" style="margin-top:0">書く場所</div><select id="cto"><option value="board" ${S.cTo === 'board' || !S.cTo ? 'selected' : ''}>連絡ボード（先生どうし）</option><optgroup label="部員ごとのメモ">${(S.cd.members || []).map(m => `<option value="${m.id}" ${S.cTo === m.id ? 'selected' : ''}>${esc(m.name)}のメモ</option>`).join('')}</optgroup></select>
+      <textarea id="cnew" style="margin-top:8px" placeholder="${!S.cTo || S.cTo === 'board' ? 'ほかの先生への連絡・共有したいこと' : 'けが・面談・気づいたことなど'}">${esc((S.cDraft || {})[S.cTo || 'board'] || '')}</textarea><button class="btn" id="csend" style="margin-top:8px;padding:11px">${!S.cTo || S.cTo === 'board' ? '送る' : 'メモを残す'}</button></div>
     <div class="list" style="margin-top:10px">${list.map(n => cnoteCard(n, true)).join('') || '<p class="mini center">まだ書き込みはありません</p>'}</div>
-    <div class="h"><span class="en">MEMO</span><span class="ja">部員ごとのメモ</span></div><div class="mini">部員ごとのメモは「部員ごと」→部員を押した画面にあります</div>
+    <div class="h"><span class="en">MEMO</span><span class="ja">部員ごとのメモ（新しい順）</span></div>
+    ${(() => { const ms = (S.cd.cnotes || []).filter(n => n.uid !== 'board').sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, 20);
+      return ms.length ? ms.map(n => `<div class="mini" style="margin:10px 0 2px"><button class="link cmem" data-uid="${n.uid}" style="font-weight:700;color:var(--main)">${esc(memberName(n.uid))}</button>のメモ</div>` + cnoteCard(n, false)).join('') : '<p class="mini center">まだメモはありません</p>'; })()}
     <div class="foot"><button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);
-  bindCnotes('board'); bindFoot();
+  bindCnotes(S.cTo || 'board'); bindFoot();
+  $('#cto').onchange = e => { S.cTo = e.target.value; render(); };
+  document.querySelectorAll('.cmem').forEach(b => b.onclick = () => { S.tab = 'members'; S.member = b.dataset.uid; pushNav(); render(); window.scrollTo(0, 0); });
   const ids = unreadBoard().map(n => n.id);
   if (ids.length) api('cnoteRead', { key: S.key, ids }).then(() => { S.cd.creads = [...(S.cd.creads || []), ...ids.map(id => ({ noteId: id, uid: S.me }))]; store.set('cd', S.cd); }).catch(() => {});
 }
