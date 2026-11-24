@@ -218,8 +218,9 @@ function handle_(b) {
     const ids = new Set(readAll_(book.getSheetByName(SHEET.members)).filter(m => m['役割'] !== 'coach' && m['名前']).map(m => String(m.id)));
     const ok = v => /^[0-9.\s,、　]*$/.test(String(v == null ? '' : v));
     for (const r of rows) {
-      if (!ids.has(String(r.uid))) return { ok: false, error: '部員がちがいます' };
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(r.date))) return { ok: false, error: '測定日の形がちがいます' };
+      const ref = /^ref:[^,]{1,10}$/.test(String(r.uid));  // 参考（引退した先輩のベスト）。測定日は ref
+      if (!ref && !ids.has(String(r.uid))) return { ok: false, error: '部員がちがいます' };
+      if (ref ? String(r.date) !== 'ref' : !/^\d{4}-\d{2}-\d{2}$/.test(String(r.date))) return { ok: false, error: '測定日の形がちがいます' };
       if (!ok(r.stand) || !ok(r.run) || !ok(r.reach)) return { ok: false, error: '数字と空白だけで入れてください' };
     }
     return withLock_(() => {
@@ -233,7 +234,7 @@ function handle_(b) {
     });
   }
   if (a === 'deleteJumps' && coach) {
-    const d = String(b.date || ''); if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return { ok: false, error: '測定日の形がちがいます' };
+    const d = String(b.date || ''); if (d !== 'ref' && !/^\d{4}-\d{2}-\d{2}$/.test(d)) return { ok: false, error: '測定日の形がちがいます' };
     return withLock_(() => { const sh = book.getSheetByName(SHEET.jumps); const v = sh.getDataRange().getValues(); const ci = v[0].indexOf('date');
       for (let i = v.length - 1; i >= 1; i--) if (String(v[i][ci]) === d) sh.deleteRow(i + 1); return { ok: true }; });
   }
@@ -254,8 +255,9 @@ function reportsOf_(book) {
 /* ---- ジャンプ測定（1行＝測定日×部員。名前は部員シートから付ける） ---- */
 function jumpsOf_(book) {
   const names = {}; readAll_(book.getSheetByName(SHEET.members)).forEach(m => { names[String(m.id)] = String(m['名前'] || ''); });
-  return readAll_(book.getSheetByName(SHEET.jumps)).filter(r => names[String(r.uid)]).map(r => ({
-    id: String(r.id), uid: String(r.uid), name: names[String(r.uid)], date: String(r.date), stand: String(r.stand || ''), run: String(r.run || ''), reach: String(r.reach || '')
+  const nm = u => /^ref:/.test(u) ? u.slice(4) : names[u];
+  return readAll_(book.getSheetByName(SHEET.jumps)).filter(r => nm(String(r.uid))).map(r => ({
+    id: String(r.id), uid: String(r.uid), name: nm(String(r.uid)), date: String(r.date), stand: String(r.stand || ''), run: String(r.run || ''), reach: String(r.reach || '')
   }));
 }
 function deleteReportRows_(book, mid) {

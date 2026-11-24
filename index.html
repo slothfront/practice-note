@@ -202,7 +202,7 @@ async function demoApi(action, b) {
   if (action === 'editReply' && isCoach) { const r = db.replies.find(x => x.id === b.replyId); if (!r) throw Object.assign(new Error('返事が見つかりません'), { server: true }); r.text = b.text; r.edited = new Date().toISOString(); store.set('demo_db2', db); return { ok: true, reply: r }; }
   if (action === 'deleteReply' && isCoach) { db.replies = db.replies.filter(x => x.id !== b.replyId); store.set('demo_db2', db); return { ok: true }; }
   if (action === 'star' && !isCoach) { const e = db.entries.find(x => x.id === b.entryId && x.uid === user.id); if (!e) throw Object.assign(new Error('記録が見つかりません'), { server: true }); e.star = b.star ? '1' : ''; store.set('demo_db2', db); return { ok: true }; }
-  if (action === 'addJumps' && isCoach) { db.jumps = db.jumps || []; const out = b.rows.map((r, i) => ({ id: 'j' + Date.now().toString(36) + i, uid: r.uid, name: (Object.values(db.users).find(u => u.id === r.uid) || {}).name || '？', date: r.date, stand: r.stand || '', run: r.run || '', reach: r.reach || '' })); const ks = new Set(out.map(x => x.uid + '|' + x.date)); db.jumps = db.jumps.filter(j => !ks.has(j.uid + '|' + j.date)).concat(out); store.set('demo_db2', db); return { ok: true, jumps: out }; }
+  if (action === 'addJumps' && isCoach) { db.jumps = db.jumps || []; const out = b.rows.map((r, i) => ({ id: 'j' + Date.now().toString(36) + i, uid: r.uid, name: /^ref:/.test(r.uid) ? r.uid.slice(4) : (Object.values(db.users).find(u => u.id === r.uid) || {}).name || '？', date: r.date, stand: r.stand || '', run: r.run || '', reach: r.reach || '' })); const ks = new Set(out.map(x => x.uid + '|' + x.date)); db.jumps = db.jumps.filter(j => !ks.has(j.uid + '|' + j.date)).concat(out); store.set('demo_db2', db); return { ok: true, jumps: out }; }
   if (action === 'deleteJumps' && isCoach) { db.jumps = (db.jumps || []).filter(j => j.date !== b.date); store.set('demo_db2', db); return { ok: true }; }
   if (action === 'addReports' && isCoach) { db.reports = (db.reports || []).filter(r => r.matchId !== b.matchId); const now = new Date().toISOString(); const add = b.items.map((it, i) => ({ id: 'p' + Date.now().toString(36) + i, matchId: b.matchId, uid: it.uid, at: now, data: it.data })); db.reports.push(...add); store.set('demo_db2', db); return { ok: true, reports: add }; }
   if (action === 'deleteReports' && isCoach) { db.reports = (db.reports || []).filter(r => r.matchId !== b.matchId); store.set('demo_db2', db); return { ok: true }; }
@@ -781,18 +781,21 @@ function renderCoachReports() {
 const NET = 224;
 const nums = t => String(t || '').split(/[\s,、　]+/).map(Number).filter(x => isFinite(x) && x > 0);
 const best = t => { const a = nums(t); return a.length ? Math.max(...a) : null; };
-function jumpTable(jumps) {
+function jumpTable(all) {
+  const refs = all.filter(j => /^ref:/.test(j.uid)).map(j => ({ name: j.name, run: best(j.run), stand: best(j.stand) }));
+  const jumps = all.filter(j => !/^ref:/.test(j.uid));
   const reachOf = {}; [...jumps].sort((a, b) => a.date.localeCompare(b.date)).forEach(j => { if (Number(j.reach) > 0) reachOf[j.uid] = Number(j.reach); });
   const people = {}; jumps.forEach(j => { (people[j.uid] = people[j.uid] || { uid: j.uid, name: j.name, rows: [] }).rows.push({ date: j.date, stand: best(j.stand), run: best(j.run), id: j.id }); });
   Object.values(people).forEach(p => { p.rows.sort((a, b) => a.date.localeCompare(b.date)); p.reach = reachOf[p.uid] || null; });
   const dates = [...new Set(jumps.map(j => j.date))].sort();
-  return { people: Object.values(people), dates };
+  return { people: Object.values(people), dates, refs };
 }
 const fmtd = d => { const [y, m, dd] = d.split('-').map(Number); return `${String(y).slice(2)}/${m}/${dd}`; };
 /* 折れ線：key＝'run'（最高到達点）か 'stand'（垂直飛び）。me の線を太い青、ほかは灰色 */
 function jumpChart(T, key, me, title) {
   const ps = T.people.filter(p => p.rows.some(r => r[key] != null)); if (!ps.length || !T.dates.length) return '';
-  const vals = ps.flatMap(p => p.rows.map(r => r[key]).filter(v => v != null)).concat([NET]);
+  const rf = (T.refs || []).filter(r => r[key] != null);
+  const vals = ps.flatMap(p => p.rows.map(r => r[key]).filter(v => v != null)).concat([NET], rf.map(r => r[key]));
   const lo = Math.floor((Math.min(...vals) - 4) / 5) * 5, hi = Math.ceil((Math.max(...vals) + 4) / 5) * 5;
   const W = 330, H = 230, x0 = 38, x1 = 262, yT = 14, yB = 196;
   const x = i => T.dates.length === 1 ? (x0 + x1) / 2 : x0 + (x1 - x0) * i / (T.dates.length - 1);
@@ -810,12 +813,14 @@ function jumpChart(T, key, me, title) {
     <g stroke="#e3e8ef">${ticks.map(v => `<line x1="${x0}" x2="${x1}" y1="${y(v)}" y2="${y(v)}"/>`).join('')}</g>
     <g font-size="10" fill="#6f7782">${ticks.map(v => `<text x="4" y="${y(v) + 4}">${v}</text>`).join('')}${T.dates.map((d, i) => `<text x="${x(i)}" y="${H - 14}" text-anchor="middle">${fmtd(d)}</text>`).join('')}</g>
     ${key === 'run' && NET >= lo && NET <= hi ? `<line x1="${x0}" x2="${x1}" y1="${y(NET)}" y2="${y(NET)}" stroke="#E0A800" stroke-width="2" stroke-dasharray="6 4"/><text x="${x0 + 2}" y="${y(NET) - 4}" font-size="10" fill="#9a7400">ネット ${NET}</text>` : ''}
-    ${lines}</svg></div>`;
+    ${rf.map(r => `<line x1="${x0}" x2="${x1}" y1="${y(r[key])}" y2="${y(r[key])}" stroke="#2E75B6" stroke-width="1.2" stroke-dasharray="2 3"/><text x="${x0 + 2}" y="${y(r[key]) - 3}" font-size="9" fill="#2E75B6" stroke="#fff" stroke-width="3" paint-order="stroke">${esc(r.name)}のベスト ${r[key]}</text>`).join('')}
+    ${lines}</svg>${rf.length ? '<div class="rnote">青の点線＝先輩のベスト（参考）</div>' : ''}</div>`;
 }
 function jumpLatestList(T, me) {
   const rows = T.people.map(p => { const r = p.rows[p.rows.length - 1]; const bRun = Math.max(...p.rows.map(x => x.run || 0)) || null; const bSt = Math.max(...p.rows.map(x => x.stand || 0)) || null;
     return `<div class="sline" style="${p.uid === me ? 'background:var(--soft);border-radius:8px;padding:4px 6px' : ''}"><b>${esc(p.name)}</b>最高到達点 ${r.run ?? '—'}　垂直飛び ${r.stand ?? '—'}${p.reach && r.run ? `　助走の跳躍 ${Math.round((r.run - p.reach) * 10) / 10}` : ''}<span class="mini">（${fmtd(r.date)}・自己ベスト ${bRun ?? '—'}／${bSt ?? '—'}）</span></div>`; }).join('');
-  return `<div class="card"><div class="subh" style="margin-top:0">いちばん新しい測定</div>${rows}<div class="rnote" style="margin-top:6px">最高到達点＝助走ジャンプで触った高さ、垂直飛び＝その場ジャンプで触った高さ（cm）。跳躍＝最高到達点−指高</div></div>`;
+  const refl = (T.refs || []).map(r => `<div class="sline"><b>${esc(r.name)}</b>最高到達点 ${r.run ?? '—'}　垂直飛び ${r.stand ?? '—'}</div>`).join('');
+  return `<div class="card"><div class="subh" style="margin-top:0">いちばん新しい測定</div>${rows}${refl ? `<div class="subh">参考：先輩のベスト</div>${refl}` : ''}<div class="rnote" style="margin-top:6px">最高到達点＝助走ジャンプで触った高さ、垂直飛び＝その場ジャンプで触った高さ（cm）。跳躍＝最高到達点−指高</div></div>`;
 }
 function jumpSection(jumps, me) {
   if (!jumps || !jumps.length) return '';
@@ -838,15 +843,16 @@ function renderCoachJump() {
       <div class="mapr"><span>指高</span><input class="jin" data-u="${m.id}" data-k="reach" inputmode="decimal" placeholder="${reach(m.id) ? '前回 ' + reach(m.id) + '（測ったときだけ）' : '測ったときだけ'}" value="${esc(h.reach || '')}"></div></div>`; }).join('')}
     <button class="btn" id="jsave" style="padding:12px">保存する</button>
     <details class="who" style="margin-top:10px"><summary>まとめて読み込む（ファイル）</summary><input type="file" id="jfile" accept=".json,application/json"></details></div>`;
-  const byDate = T.dates.slice().reverse().map(dt => { const rows = J.filter(j => j.date === dt);
+  const byDate = T.dates.slice().reverse().map(dt => { const rows = J.filter(j => j.date === dt && !/^ref:/.test(j.uid));
     return `<div class="card"><div class="date"><span>${esc(jdate(dt))}</span><span class="mini">${rows.length}人</span></div>${rows.map(j => `<div class="sline"><b>${esc(j.name)}</b>その場 ${esc(j.stand || '—')}　助走 ${esc(j.run || '—')}${j.reach ? `　指高 ${esc(j.reach)}` : ''}</div>`).join('')}
       <div class="rbtns"><button class="mini-btn" data-jedit="${dt}">この日を直す</button><button class="mini-btn del" data-jdel="${dt}">この日を消す</button></div></div>`; }).join('');
-  shell('顧問用　' + S.name, form + jumpSection(J, null) + `<div class="h"><span class="en">RECORDS</span><span class="ja">測定日ごと</span></div><div class="list">${byDate || '<p class="mini center">まだありません</p>'}</div>
+  const refCard = (T.refs || []).length ? `<div class="card"><div class="date"><span>参考：先輩のベスト</span></div>${T.refs.map(r => `<div class="sline"><b>${esc(r.name)}</b>最高到達点 ${r.run ?? '—'}　垂直飛び ${r.stand ?? '—'}</div>`).join('')}<div class="rbtns"><button class="mini-btn del" data-jdel="ref">参考を消す</button></div></div>` : '';
+  shell('顧問用　' + S.name, form + jumpSection(J, null) + `<div class="h"><span class="en">RECORDS</span><span class="ja">測定日ごと</span></div><div class="list">${byDate || '<p class="mini center">まだありません</p>'}${refCard}</div>
     <div class="foot"><button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);
   $('#jdate').onchange = e => { S.jDate = e.target.value; render(); };
   document.querySelectorAll('[data-jedit]').forEach(b => b.onclick = () => { S.jDate = b.dataset.jedit; render(); window.scrollTo(0, 0); });
   document.querySelectorAll('[data-jdel]').forEach(b => b.onclick = async () => {
-    const dt = b.dataset.jdel; if (!confirm(`${jdate(dt)}の測定を全員分消します。よいですか？`)) return; b.disabled = true;
+    const dt = b.dataset.jdel; if (!confirm(dt === 'ref' ? '先輩のベスト（参考）を消します。よいですか？' : `${jdate(dt)}の測定を全員分消します。よいですか？`)) return; b.disabled = true;
     try { await api('deleteJumps', { key: S.key, date: dt }); S.cd.jumps = (S.cd.jumps || []).filter(j => j.date !== dt); store.set('cd', S.cd); toast('消しました'); render(); }
     catch (e) { b.disabled = false; toast(e.server ? e.message : 'ネットにつながっていません'); }
   });
@@ -868,8 +874,8 @@ function renderCoachJump() {
   $('#jfile').onchange = async ev => {
     try { const f = JSON.parse(await ev.target.files[0].text()); if (f.kind !== 'pn-jump' || !Array.isArray(f.rows)) throw 0;
       const rows = f.rows.map(r => Object.assign({}, r, { uid: guessUid(r.name) })); const miss = rows.filter(r => !r.uid).map(r => r.name);
-      const ok = rows.filter(r => r.uid).map(({ name, ...r }) => r);
-      if (!confirm(`${ok.length}件を読み込みます。${miss.length ? `\n部員が見つからない名前（読み込まない）：${[...new Set(miss)].join('・')}` : ''}\nよいですか？`)) return;
+      const ok = rows.filter(r => r.uid).map(({ name, ...r }) => r).concat((f.refs || []).map(r => ({ uid: 'ref:' + String(r.name).slice(0, 10), date: 'ref', stand: String(r.stand || ''), run: String(r.run || '') })));
+      if (!confirm(`${ok.length}件を読み込みます${(f.refs || []).length ? `（先輩のベスト${f.refs.length}人分を含む）` : ''}。${miss.length ? `\n部員が見つからない名前（読み込まない）：${[...new Set(miss)].join('・')}` : ''}\nよいですか？`)) return;
       await send(ok); toast(`${ok.length}件を読み込みました`); render(); }
     catch (e) { toast(e && e.server ? e.message : 'ジャンプのファイルではないようです'); }
   };
