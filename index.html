@@ -782,20 +782,22 @@ const NET = 224;
 const nums = t => String(t || '').split(/[\s,、　]+/).map(Number).filter(x => isFinite(x) && x > 0);
 const best = t => { const a = nums(t); return a.length ? Math.max(...a) : null; };
 function jumpTable(all) {
-  const refs = all.filter(j => /^ref:/.test(j.uid)).map(j => ({ name: j.name, run: best(j.run), stand: best(j.stand) }));
+  const rd = v => v == null ? null : Math.round(v * 10) / 10;
+  const withDiff = (o, reach) => Object.assign(o, { vj: reach && o.stand ? rd(o.stand - reach) : null, jh: reach && o.run ? rd(o.run - reach) : null });
+  const refs = all.filter(j => /^ref:/.test(j.uid)).map(j => withDiff({ name: j.name, run: best(j.run), stand: best(j.stand) }, Number(j.reach) > 0 ? Number(j.reach) : null));
   const jumps = all.filter(j => !/^ref:/.test(j.uid));
   const reachOf = {}; [...jumps].sort((a, b) => a.date.localeCompare(b.date)).forEach(j => { if (Number(j.reach) > 0) reachOf[j.uid] = Number(j.reach); });
   const people = {}; jumps.forEach(j => { (people[j.uid] = people[j.uid] || { uid: j.uid, name: j.name, rows: [] }).rows.push({ date: j.date, stand: best(j.stand), run: best(j.run), id: j.id }); });
-  Object.values(people).forEach(p => { p.rows.sort((a, b) => a.date.localeCompare(b.date)); p.reach = reachOf[p.uid] || null; });
+  Object.values(people).forEach(p => { p.rows.sort((a, b) => a.date.localeCompare(b.date)); p.reach = reachOf[p.uid] || null; p.rows.forEach(r => withDiff(r, p.reach)); });
   const dates = [...new Set(jumps.map(j => j.date))].sort();
   return { people: Object.values(people), dates, refs };
 }
 const fmtd = d => { const [y, m, dd] = d.split('-').map(Number); return `${String(y).slice(2)}/${m}/${dd}`; };
-/* 折れ線：key＝'run'（最高到達点）か 'stand'（垂直飛び）。me の線を太い青、ほかは灰色 */
+/* 折れ線：key＝'run'（最高到達点）・'stand'（その場の到達点）・'vj'（垂直跳び＝その場−指高）・'jh'（跳躍高＝最高到達点−指高）。me の線を太い青、ほかは灰色 */
 function jumpChart(T, key, me, title) {
   const ps = T.people.filter(p => p.rows.some(r => r[key] != null)); if (!ps.length || !T.dates.length) return '';
   const rf = (T.refs || []).filter(r => r[key] != null);
-  const vals = ps.flatMap(p => p.rows.map(r => r[key]).filter(v => v != null)).concat([NET], rf.map(r => r[key]));
+  const vals = ps.flatMap(p => p.rows.map(r => r[key]).filter(v => v != null)).concat(key === 'run' ? [NET] : [], rf.map(r => r[key]));
   const lo = Math.floor((Math.min(...vals) - 4) / 5) * 5, hi = Math.ceil((Math.max(...vals) + 4) / 5) * 5;
   const W = 330, H = 230, x0 = 38, x1 = 262, yT = 14, yB = 196;
   const x = i => T.dates.length === 1 ? (x0 + x1) / 2 : x0 + (x1 - x0) * i / (T.dates.length - 1);
@@ -817,16 +819,19 @@ function jumpChart(T, key, me, title) {
     ${lines}</svg>${rf.length ? '<div class="rnote">青の点線＝先輩のベスト（参考）</div>' : ''}</div>`;
 }
 function jumpLatestList(T, me) {
-  const rows = T.people.map(p => { const r = p.rows[p.rows.length - 1]; const bRun = Math.max(...p.rows.map(x => x.run || 0)) || null; const bSt = Math.max(...p.rows.map(x => x.stand || 0)) || null;
-    return `<div class="sline" style="${p.uid === me ? 'background:var(--soft);border-radius:8px;padding:4px 6px' : ''}"><b>${esc(p.name)}</b>最高到達点 ${r.run ?? '—'}　垂直飛び ${r.stand ?? '—'}${p.reach && r.run ? `　助走の跳躍 ${Math.round((r.run - p.reach) * 10) / 10}` : ''}<span class="mini">（${fmtd(r.date)}・自己ベスト ${bRun ?? '—'}／${bSt ?? '—'}）</span></div>`; }).join('');
-  const refl = (T.refs || []).map(r => `<div class="sline"><b>${esc(r.name)}</b>最高到達点 ${r.run ?? '—'}　垂直飛び ${r.stand ?? '—'}</div>`).join('');
-  return `<div class="card"><div class="subh" style="margin-top:0">いちばん新しい測定</div>${rows}${refl ? `<div class="subh">参考：先輩のベスト</div>${refl}` : ''}<div class="rnote" style="margin-top:6px">最高到達点＝助走ジャンプで触った高さ、垂直飛び＝その場ジャンプで触った高さ（cm）。跳躍＝最高到達点−指高</div></div>`;
+  const bst = (p, k) => { const v = p.rows.map(x => x[k]).filter(x => x != null); return v.length ? Math.max(...v) : '—'; };
+  const rows = T.people.map(p => { const r = p.rows[p.rows.length - 1];
+    return `<div class="sline" style="${p.uid === me ? 'background:var(--soft);border-radius:8px;padding:4px 6px' : ''}"><b>${esc(p.name)}</b><span class="mini">${fmtd(r.date)}</span><br>最高到達点 ${r.run ?? '—'}　その場 ${r.stand ?? '—'}${p.reach ? `<br>跳躍高 ${r.jh ?? '—'}　垂直跳び ${r.vj ?? '—'}　<span class="mini">（指高 ${p.reach}）</span>` : '<br><span class="mini">指高が未測定なので、跳躍高・垂直跳びは出ません</span>'}<br><span class="mini">自己ベスト：最高到達点 ${bst(p, 'run')}・その場 ${bst(p, 'stand')}${p.reach ? `・跳躍高 ${bst(p, 'jh')}・垂直跳び ${bst(p, 'vj')}` : ''}</span></div>`; }).join('');
+  const refl = (T.refs || []).map(r => `<div class="sline"><b>${esc(r.name)}</b>最高到達点 ${r.run ?? '—'}　その場 ${r.stand ?? '—'}${r.jh != null ? `　跳躍高 ${r.jh}　垂直跳び ${r.vj ?? '—'}` : ''}</div>`).join('');
+  return `<div class="card"><div class="subh" style="margin-top:0">いちばん新しい測定</div>${rows}${refl ? `<div class="subh">参考：先輩のベスト</div>${refl}` : ''}
+    <div class="rnote" style="margin-top:6px">最高到達点＝助走して跳んで触った高さ／その場の到達点＝その場で跳んで触った高さ／跳躍高＝最高到達点−指高／垂直跳び＝その場の到達点−指高（cm）</div></div>`;
 }
 function jumpSection(jumps, me) {
   if (!jumps || !jumps.length) return '';
   const T = jumpTable(jumps);
   return `<div class="h"><span class="en">JUMP</span><span class="ja">ジャンプの推移</span></div>
-    ${jumpChart(T, 'run', me, '最高到達点（助走）')}${jumpChart(T, 'stand', me, '垂直飛び（その場）')}${jumpLatestList(T, me)}`;
+    ${jumpChart(T, 'run', me, '最高到達点（助走して触った高さ）')}${jumpChart(T, 'stand', me, 'その場の到達点（その場で触った高さ）')}${jumpChart(T, 'jh', me, '跳躍高（最高到達点−指高）')}${jumpChart(T, 'vj', me, '垂直跳び（その場の到達点−指高）')}
+    ${T.people.some(p => !p.reach) ? '<div class="rnote" style="margin:-4px 0 8px">跳躍高・垂直跳びは、指高を測った人だけ出ます</div>' : ''}${jumpLatestList(T, me)}`;
 }
 /* ---- 顧問：ジャンプを入れる ---- */
 function renderCoachJump() {
@@ -846,7 +851,7 @@ function renderCoachJump() {
   const byDate = T.dates.slice().reverse().map(dt => { const rows = J.filter(j => j.date === dt && !/^ref:/.test(j.uid));
     return `<div class="card"><div class="date"><span>${esc(jdate(dt))}</span><span class="mini">${rows.length}人</span></div>${rows.map(j => `<div class="sline"><b>${esc(j.name)}</b>その場 ${esc(j.stand || '—')}　助走 ${esc(j.run || '—')}${j.reach ? `　指高 ${esc(j.reach)}` : ''}</div>`).join('')}
       <div class="rbtns"><button class="mini-btn" data-jedit="${dt}">この日を直す</button><button class="mini-btn del" data-jdel="${dt}">この日を消す</button></div></div>`; }).join('');
-  const refCard = (T.refs || []).length ? `<div class="card"><div class="date"><span>参考：先輩のベスト</span></div>${T.refs.map(r => `<div class="sline"><b>${esc(r.name)}</b>最高到達点 ${r.run ?? '—'}　垂直飛び ${r.stand ?? '—'}</div>`).join('')}<div class="rbtns"><button class="mini-btn del" data-jdel="ref">参考を消す</button></div></div>` : '';
+  const refCard = (T.refs || []).length ? `<div class="card"><div class="date"><span>参考：先輩のベスト</span></div>${T.refs.map(r => `<div class="sline"><b>${esc(r.name)}</b>最高到達点 ${r.run ?? '—'}　その場 ${r.stand ?? '—'}${r.jh != null ? `　跳躍高 ${r.jh}` : ''}</div>`).join('')}<div class="rbtns"><button class="mini-btn del" data-jdel="ref">参考を消す</button></div></div>` : '';
   shell('顧問用　' + S.name, form + jumpSection(J, null) + `<div class="h"><span class="en">RECORDS</span><span class="ja">測定日ごと</span></div><div class="list">${byDate || '<p class="mini center">まだありません</p>'}${refCard}</div>
     <div class="foot"><button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);
   $('#jdate').onchange = e => { S.jDate = e.target.value; render(); };
@@ -874,7 +879,7 @@ function renderCoachJump() {
   $('#jfile').onchange = async ev => {
     try { const f = JSON.parse(await ev.target.files[0].text()); if (f.kind !== 'pn-jump' || !Array.isArray(f.rows)) throw 0;
       const rows = f.rows.map(r => Object.assign({}, r, { uid: guessUid(r.name) })); const miss = rows.filter(r => !r.uid).map(r => r.name);
-      const ok = rows.filter(r => r.uid).map(({ name, ...r }) => r).concat((f.refs || []).map(r => ({ uid: 'ref:' + String(r.name).slice(0, 10), date: 'ref', stand: String(r.stand || ''), run: String(r.run || '') })));
+      const ok = rows.filter(r => r.uid).map(({ name, ...r }) => r).concat((f.refs || []).map(r => ({ uid: 'ref:' + String(r.name).slice(0, 10), date: 'ref', stand: String(r.stand || ''), run: String(r.run || ''), reach: String(r.reach || '') })));
       if (!confirm(`${ok.length}件を読み込みます${(f.refs || []).length ? `（先輩のベスト${f.refs.length}人分を含む）` : ''}。${miss.length ? `\n部員が見つからない名前（読み込まない）：${[...new Set(miss)].join('・')}` : ''}\nよいですか？`)) return;
       await send(ok); toast(`${ok.length}件を読み込みました`); render(); }
     catch (e) { toast(e && e.server ? e.message : 'ジャンプのファイルではないようです'); }
