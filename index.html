@@ -399,7 +399,7 @@ function renderToday() {
   <textarea id="next" placeholder="次にやること">${esc(d.next)}</textarea>
   ${M ? `<div class="h"><span class="en">TO COACH</span><span class="ja">顧問に伝えたいこと</span></div><div class="hint">あれば</div>
   <textarea id="tocoach">${esc(d.tocoach)}</textarea>` : ''}
-  ${privOK() ? `<div class="privnote">練習ノートは、評価のためのものではありません。先生に見せるかどうかは、自分で決めてください。<br>「自分だけに残す」にすると、先生に届くのは<b>日付と数字</b>（意識できた・体の調子・気持ち${M ? '・出来' : ''}）だけです。書いた中身は記録の表には残りますが、先生のアプリには出ません。あとから「先生に見せる」にもできます。</div>` : ''}
+  ${privOK() ? `<div class="privnote">「自分だけに残す」にすると、先生に届くのは<b>日付と数字</b>（意識できた・体の調子・気持ち${M ? '・出来' : ''}）だけです。書いた中身は記録の表には残りますが、先生のアプリには出ません。あとから「先生に見せる」にもできます。</div>` : ''}
   <button class="btn" id="submit" ${S.viewAs ? 'disabled' : ''}>${S.viewAs ? '提出（見るだけの画面では押せません）' : privOK() ? '先生に見せる' : '提出'}</button>
   ${privOK() ? `<button class="btn ghost2" id="submitMe" ${S.viewAs ? 'disabled' : ''}>自分だけに残す</button>` : ''}
   <p class="mini center">電波が無いときは、つながったときに自動で送ります</p>`);
