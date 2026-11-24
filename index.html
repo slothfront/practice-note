@@ -862,7 +862,7 @@ function renderCoachJump() {
   const reach = uid => { const p = T.people.find(x => x.uid === uid); return p && p.reach ? p.reach : ''; };
   const d = S.jDate || today();
   const have = uid => J.find(j => j.uid === uid && j.date === d);
-  const form = `<div class="card"><div class="h" style="margin-top:0"><span class="en">MEASURE</span><span class="ja">測定を入れる</span></div>
+  const form = `<details class="card mrep" id="jform" ${S.jOpen ? 'open' : ''}><summary><div class="h" style="margin:0"><span class="en">MEASURE</span><span class="ja">測定を入れる（${S.jOpen ? 'タップでしまう' : 'タップで開く'}）</span></div></summary>
     <div class="q">測定日</div><input type="date" id="jdate" value="${d}">
     <div class="hint" style="margin-top:8px">触った高さ（cm）。試技が何回かあれば、空白で区切って全部入れる（いちばん高いものを使います）。空の人は記録しません</div>
     ${mem.map(m => { const h = have(m.id) || {}; return `<div class="card" style="margin:8px 0;padding:8px 10px;box-shadow:none;border:2px solid var(--line2)"><div class="date"><span>${esc(m.name)}</span>${h.id ? '<span class="tag wait">この日は入力済み</span>' : ''}</div>
@@ -870,15 +870,16 @@ function renderCoachJump() {
       <div class="mapr"><span>助走</span><input class="jin" data-u="${m.id}" data-k="run" inputmode="decimal" placeholder="例 258 261" value="${esc(h.run || '')}"></div>
       <div class="mapr"><span>指高</span><input class="jin" data-u="${m.id}" data-k="reach" inputmode="decimal" placeholder="${reach(m.id) ? '前回 ' + reach(m.id) + '（測ったときだけ）' : '測ったときだけ'}" value="${esc(h.reach || '')}"></div></div>`; }).join('')}
     <button class="btn" id="jsave" style="padding:12px">保存する</button>
-    <details class="who" style="margin-top:10px"><summary>まとめて読み込む（ファイル）</summary><input type="file" id="jfile" accept=".json,application/json"></details></div>`;
+    <details class="who" style="margin-top:10px"><summary>まとめて読み込む（ファイル）</summary><input type="file" id="jfile" accept=".json,application/json"></details></details>`;
   const byDate = T.dates.slice().reverse().map(dt => { const u = {}; J.filter(j => j.date === dt && !/^ref:/.test(j.uid)).forEach(j => { u[j.uid] = j; }); const rows = Object.values(u);
     return `<div class="card"><div class="date"><span>${esc(jdate(dt))}</span><span class="mini">${rows.length}人</span></div>${rows.map(j => `<div class="sline"><b>${esc(j.name)}</b>その場 ${esc(j.stand || '—')}　助走 ${esc(j.run || '—')}${j.reach ? `　指高 ${esc(j.reach)}` : ''}</div>`).join('')}
       <div class="rbtns"><button class="mini-btn" data-jedit="${dt}">この日を直す</button><button class="mini-btn del" data-jdel="${dt}">この日を消す</button></div></div>`; }).join('');
   const refCard = (T.refs || []).length ? `<div class="card"><div class="date"><span>参考：先輩のベスト</span></div>${T.refs.map(r => `<div class="sline"><b>${esc(r.name)}</b>最高到達点 ${r.run ?? '—'}　その場 ${r.stand ?? '—'}${r.jh != null ? `　跳躍高 ${r.jh}` : ''}</div>`).join('')}<div class="rbtns"><button class="mini-btn del" data-jdel="ref">参考を消す</button></div></div>` : '';
   shell('顧問用　' + S.name, form + jumpSection(J, null) + `<div class="h"><span class="en">RECORDS</span><span class="ja">測定日ごと</span></div><div class="list">${byDate || '<p class="mini center">まだありません</p>'}${refCard}</div>
     <div class="foot"><button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);
+  $('#jform').addEventListener('toggle', e => { const o = e.target.open; if (o !== !!S.jOpen) { S.jOpen = o; const j = e.target.querySelector('summary .ja'); if (j) j.textContent = `測定を入れる（${o ? 'タップでしまう' : 'タップで開く'}）`; } });
   $('#jdate').onchange = e => { S.jDate = e.target.value; render(); };
-  document.querySelectorAll('[data-jedit]').forEach(b => b.onclick = () => { S.jDate = b.dataset.jedit; render(); window.scrollTo(0, 0); });
+  document.querySelectorAll('[data-jedit]').forEach(b => b.onclick = () => { S.jDate = b.dataset.jedit; S.jOpen = true; render(); window.scrollTo(0, 0); });
   document.querySelectorAll('[data-jdel]').forEach(b => b.onclick = async () => {
     const dt = b.dataset.jdel; if (!confirm(dt === 'ref' ? '先輩のベスト（参考）を消します。よいですか？' : `${jdate(dt)}の測定を全員分消します。よいですか？`)) return; b.disabled = true;
     try { await api('deleteJumps', { key: S.key, date: dt }); S.cd.jumps = (S.cd.jumps || []).filter(j => j.date !== dt); store.set('cd', S.cd); toast('消しました'); render(); }
