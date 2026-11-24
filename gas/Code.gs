@@ -9,7 +9,7 @@ const PROP_ID = 'PN_SHEET_ID';
 const COLS = {
   members: ['合言葉', 'id', '名前', '役割', '初回', '学年'],
   entries: ['id', 'uid', 'date', 'type', 'focus', 'opp', 'n1', 'n2', 'n3', 'n4', 'r1', 'r2', 'r3', 'r4',
-            'good', 'bad', 'heard', 'mgood', 'mbad', 'tgood', 'tbad', 'mprac', 'tocoach', 'next', 'at', 'received', 'star'],
+            'good', 'bad', 'heard', 'mgood', 'mbad', 'tgood', 'tbad', 'mprac', 'tocoach', 'next', 'at', 'received', 'star', 'priv'],
   replies: ['id', 'entryId', 'text', 'at', 'by', 'byId', 'edited'],
   notices: ['id', 'to', 'text', 'at', 'by', 'byId', 'edited', 'targets'],
   reads: ['noticeId', 'uid', 'at'],
@@ -90,7 +90,7 @@ function handle_(b) {
     return withLock_(() => {
       const sh = book.getSheetByName(SHEET.entries);
       if (readAll_(sh).some(r => r.id === en.id)) return { ok: true, id: en.id };
-      const row = COLS.entries.map(c => c === 'uid' ? user.id : c === 'received' ? new Date().toISOString() : (en[c] == null ? '' : clip_(en[c])));
+      const row = COLS.entries.map(c => c === 'uid' ? user.id : c === 'received' ? new Date().toISOString() : c === 'priv' ? (en.priv ? '1' : '') : c === 'star' ? '' : (en[c] == null ? '' : clip_(en[c])));
       sh.appendRow(row);
       return { ok: true, id: en.id };
     });
@@ -102,15 +102,15 @@ function handle_(b) {
     const notices = readAll_(book.getSheetByName(SHEET.notices)).filter(n => forUser_(n, user)).map(cleanN_);
     const reports = reportsOf_(book).filter(r => r.uid === user.id || r.uid === 'team');
     const readN = readAll_(book.getSheetByName(SHEET.reads)).filter(r => String(r.uid) === user.id).map(r => ({ noticeId: String(r.noticeId), at: String(r.at || '') }));
-    return { ok: true, name: user.name, entries, replies, notices, readN, reports, jumps: jumpsOf_(book) };
+    return { ok: true, name: user.name, entries, replies, notices, readN, reports, jumps: jumpsOf_(book), feat: ['priv'] };
   }
   if (a === 'coachList' && coach) {
     const members = readAll_(book.getSheetByName(SHEET.members)).filter(r => r['役割'] !== 'coach' && r['名前']).map(r => ({ id: String(r.id), name: String(r['名前']), grade: gradeOf_(r['学年']) }));
-    const entries = readAll_(book.getSheetByName(SHEET.entries)).map(r => Object.assign(clean_(r), { uid: String(r.uid) }));
+    const entries = readAll_(book.getSheetByName(SHEET.entries)).map(r => hidePriv_(Object.assign(clean_(r), { uid: String(r.uid) })));
     const replies = readAll_(book.getSheetByName(SHEET.replies)).map(cleanR_);
     const notices = readAll_(book.getSheetByName(SHEET.notices)).map(cleanN_);
     const reads = readAll_(book.getSheetByName(SHEET.reads)).map(r => ({ noticeId: String(r.noticeId), uid: String(r.uid), at: String(r.at || '') }));
-    return { ok: true, name: user.name, me: user.id, members, entries, replies, notices, reads, reports: reportsOf_(book), jumps: jumpsOf_(book),
+    return { ok: true, feat: ['priv'], name: user.name, me: user.id, members, entries, replies, notices, reads, reports: reportsOf_(book), jumps: jumpsOf_(book),
       coaches: readAll_(book.getSheetByName(SHEET.members)).filter(r => r['役割'] === 'coach' && r['名前']).map(r => ({ id: String(r.id), name: String(r['名前']) })),
       cnotes: readAll_(book.getSheetByName(SHEET.cnotes)).map(cleanC_), creads: readAll_(book.getSheetByName(SHEET.creads)).map(r => ({ noteId: String(r.noteId), uid: String(r.uid) })) };
   }
@@ -118,7 +118,9 @@ function handle_(b) {
     const text = String(b.text || '').trim();
     if (!text) return { ok: false, error: '返事が空です' };
     return withLock_(() => {
-      if (!readAll_(book.getSheetByName(SHEET.entries)).some(r => r.id === b.entryId)) return { ok: false, error: '記録が見つかりません' };
+      const en = readAll_(book.getSheetByName(SHEET.entries)).find(r => r.id === b.entryId);
+      if (!en) return { ok: false, error: '記録が見つかりません' };
+      if (String(en.priv || '') === '1') return { ok: false, error: '本人だけの記録には返事できません' };
       const r = { id: 'r' + Utilities.getUuid().slice(0, 8), entryId: String(b.entryId), text: clip_(text), at: new Date().toISOString(), by: user.name, byId: user.id, edited: '' };
       book.getSheetByName(SHEET.replies).appendRow(COLS.replies.map(c => r[c]));
       return { ok: true, reply: r };
@@ -141,6 +143,19 @@ function handle_(b) {
         return { ok: true, reply: cleanR_({ id: v[i][ci('id')], entryId: v[i][ci('entryId')], text: clip_(text), at: v[i][ci('at')], by, byId, edited: now }) };
       }
       return { ok: false, error: '返事が見つかりません' };
+    });
+  }
+  /* 自分だけに残した記録を、あとから先生に見せる */
+  if (a === 'share' && !coach) {
+    return withLock_(() => {
+      const sh = book.getSheetByName(SHEET.entries); const v = sh.getDataRange().getValues(); const h = v[0];
+      for (let i = 1; i < v.length; i++) {
+        if (String(v[i][h.indexOf('id')]) !== String(b.entryId)) continue;
+        if (String(v[i][h.indexOf('uid')]) !== user.id) return { ok: false, error: '自分の記録だけです' };
+        sh.getRange(i + 1, h.indexOf('priv') + 1).setValue('');
+        return { ok: true };
+      }
+      return { ok: false, error: '記録が見つかりません' };
     });
   }
   if (a === 'star' && !coach) {
@@ -345,8 +360,12 @@ function clean_(r) {
   ['n1', 'n2', 'n3', 'n4'].forEach(k => o[k] = o[k] === '' ? 0 : Number(o[k]));
   ['id', 'date', 'type', 'at'].forEach(k => o[k] = String(o[k]));
   o.star = String(o.star || '') === '1';
+  o.priv = String(o.priv || '') === '1';
   return o;
 }
+/** 本人が「自分だけ」にした記録は、顧問には日付・練習／試合・数字だけ渡す（中身はここで消してから送る） */
+const PRIV_TEXT = ['focus', 'opp', 'r1', 'r2', 'r3', 'r4', 'good', 'bad', 'heard', 'mgood', 'mbad', 'tgood', 'tbad', 'mprac', 'tocoach', 'next'];
+function hidePriv_(e) { if (!e.priv) return e; const o = Object.assign({}, e); PRIV_TEXT.forEach(k => o[k] = ''); o.star = false; return o; }
 function cleanR_(r) { return { id: String(r.id), entryId: String(r.entryId), text: String(r.text).replace(/^'/, ''), at: String(r.at), by: String(r.by || '佐藤'), byId: String(r.byId || ''), edited: String(r.edited || '') }; }
 function cleanC_(n) { return { id: String(n.id), uid: String(n.uid), text: String(n.text).replace(/^'/, ''), at: String(n.at), by: String(n.by || ''), byId: String(n.byId || ''), edited: String(n.edited || '') }; }
 function cleanN_(n) { return { id: String(n.id), to: String(n.to), targets: String(n.targets || ''), text: String(n.text).replace(/^'/, ''), at: String(n.at), by: String(n.by || '佐藤'), byId: String(n.byId || ''), edited: String(n.edited || '') }; }

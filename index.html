@@ -43,6 +43,7 @@ textarea:focus,input:focus{outline:2px solid var(--blue);border-color:var(--blue
 .date{font-weight:700;color:var(--navy);display:flex;justify-content:space-between;align-items:center;gap:8px}
 .tag{background:var(--yellow);font-size:10px;font-weight:800;padding:2px 7px;border-radius:9px;font-family:Arial;color:#000;white-space:nowrap}
 .tag.wait{background:var(--pale);color:var(--navy)}
+.tag.me{background:#E6E6E6!important;color:#444!important}.privnote{background:var(--soft);border-radius:12px;padding:10px 12px;font-size:12.5px;line-height:1.6;margin:14px 0 4px}.btn.ghost2{background:#fff;color:var(--main);border:2px solid var(--main);box-shadow:none;margin-top:10px}
 .nums{display:flex;gap:12px;font-size:12px;margin:6px 0;flex-wrap:wrap}.nums b{color:var(--navy);font-size:14px}
 .kv{font-size:13px;margin:4px 0;line-height:1.5}.kv .k{color:var(--gray);font-size:11px;display:block}
 .coach{margin-top:10px;border-left:4px solid var(--blue);background:#f1f6fc;padding:8px 10px;font-size:14px;line-height:1.5;white-space:pre-wrap}
@@ -222,7 +223,7 @@ async function demoApi(action, b) {
 /* ===== 状態 ===== */
 const S = {
   key: store.get('key', ''), name: store.get('name', ''), role: store.get('role', 'student'), needSet: store.get('needSet', false), me: store.get('me', ''), editing: null, editingN: null, notices: store.get('notices', []), seenN: store.get('seenN', []), reportedN: store.get('reportedN', []),
-  cd: store.get('cd', { members: [], entries: [], replies: [] }), reports: store.get('reports', []), jumps: store.get('jumps', []), readN: store.get('readN', []), seenRep: store.get('seenRep', []), imp: null, member: null, showAll: false, repDraft: {},
+  cd: store.get('cd', { members: [], entries: [], replies: [] }), reports: store.get('reports', []), jumps: store.get('jumps', []), readN: store.get('readN', []), feat: store.get('feat', []), seenRep: store.get('seenRep', []), imp: null, member: null, showAll: false, repDraft: {},
   entries: store.get('entries', []), replies: store.get('replies', []),
   outbox: store.get('outbox', []), seen: store.get('seen', []),
   tab: 'today', draft: store.get('draft', null), justSeen: [], hmode: store.get('hmode', 'all'), hq: '', starOnly: false
@@ -278,7 +279,7 @@ async function refresh() {
   try {
     await flush();
     const j = await api('list', { key: S.key });
-    S.entries = (j.entries || []).map(e => Object.assign(e, { star: e.star === true || e.star === '1' || e.star === 1 })); S.replies = j.replies; S.notices = j.notices || []; S.readN = j.readN || []; store.set('readN', S.readN); S.reports = parseReports(j.reports); S.jumps = j.jumps || []; store.set('jumps', S.jumps); if (j.name) { S.name = j.name; store.set('name', j.name); }
+    S.feat = j.feat || []; store.set('feat', S.feat); S.entries = (j.entries || []).map(e => Object.assign(e, { star: e.star === true || e.star === '1' || e.star === 1, priv: e.priv === true || e.priv === '1' })); S.replies = j.replies; S.notices = j.notices || []; S.readN = j.readN || []; store.set('readN', S.readN); S.reports = parseReports(j.reports); S.jumps = j.jumps || []; store.set('jumps', S.jumps); if (j.name) { S.name = j.name; store.set('name', j.name); }
     save(); return true;
   } catch (e) { forgetIfBadKey(e); return false; }
 }
@@ -398,12 +399,15 @@ function renderToday() {
   <textarea id="next" placeholder="次にやること">${esc(d.next)}</textarea>
   ${M ? `<div class="h"><span class="en">TO COACH</span><span class="ja">顧問に伝えたいこと</span></div><div class="hint">あれば</div>
   <textarea id="tocoach">${esc(d.tocoach)}</textarea>` : ''}
-  <button class="btn" id="submit" ${S.viewAs ? 'disabled' : ''}>${S.viewAs ? '提出（見るだけの画面では押せません）' : '提出'}</button>
+  ${privOK() ? `<div class="privnote">練習ノートは、評価のためのものではありません。先生に見せるかどうかは、自分で決めてください。<br>「自分だけに残す」にすると、先生に届くのは<b>日付と数字</b>（意識できた・体の調子・気持ち${M ? '・出来' : ''}）だけです。書いた中身は記録の表には残りますが、先生のアプリには出ません。あとから「先生に見せる」にもできます。</div>` : ''}
+  <button class="btn" id="submit" ${S.viewAs ? 'disabled' : ''}>${S.viewAs ? '提出（見るだけの画面では押せません）' : privOK() ? '先生に見せる' : '提出'}</button>
+  ${privOK() ? `<button class="btn ghost2" id="submitMe" ${S.viewAs ? 'disabled' : ''}>自分だけに残す</button>` : ''}
   <p class="mini center">電波が無いときは、つながったときに自動で送ります</p>`);
   document.querySelectorAll('.dot').forEach(b => b.onclick = () => { saveDraft(); d[b.dataset.n] = Number(b.dataset.v); store.set('draft', d); renderToday(); });
   document.querySelectorAll('.seg button').forEach(b => b.onclick = () => { saveDraft(); d.type = b.dataset.type; store.set('draft', d); renderToday(); });
   document.querySelectorAll('textarea,input').forEach(el => el.addEventListener('input', () => { el.classList.remove('miss'); saveDraft(); }));
-  $('#submit').onclick = submit;
+  $('#submit').onclick = () => submit(false);
+  const sm = $('#submitMe'); if (sm) sm.onclick = () => submit(true);
   const setDate = v => {
     saveDraft(); if (!v || v > today()) { renderToday(); return; }
     const was = lastNext(d.date); d.date = v; d.pick = v !== today();
@@ -415,15 +419,18 @@ function renderToday() {
   const tr = $('#toRep'); if (tr) tr.onclick = () => go('report');
   const tn = $('#toN'); if (tn) tn.onclick = () => go('snotice');
 }
-async function submit() {
+async function submit(priv) {
   if (S.viewAs) { toast('見るだけの画面です。提出はできません'); return; }
+  priv = !!priv && privOK();
   saveDraft(); const d = S.draft; const miss = []; const M = d.type === 'match';
   document.querySelectorAll('.miss').forEach(x => x.classList.remove('miss'));
-  if (!d.focus.trim()) miss.push('#focus');
-  if (M && !d.opp.trim()) miss.push('#opp');
+  /* 自分だけに残すときは、数字だけあればよい（ことばは書けるだけ） */
+  if (!priv && !d.focus.trim()) miss.push('#focus');
+  if (!priv && M && !d.opp.trim()) miss.push('#opp');
   (M ? FM : F).forEach(([n]) => { if (!d[n]) miss.push(`.row[data-row=${n}]`); });
-  if (M) MQ.forEach(([k]) => { if (!d[k].trim()) miss.push('#' + k); });
-  if (!d.next.trim()) miss.push('#next');
+  if (!priv && M) MQ.forEach(([k]) => { if (!d[k].trim()) miss.push('#' + k); });
+  if (!priv && !d.next.trim()) miss.push('#next');
+  if (priv && M && (d.tocoach || '').trim() && !miss.length && !confirm('「顧問に伝えたいこと」は、自分だけに残すと先生に届きません。このまま自分だけに残しますか？')) return;
   if (d.date > today()) { toast('先の日付には書けません'); return; }
   if (miss.length) {
     miss.forEach(q => { const el = $(q); if (el) el.classList.add('miss'); });
@@ -432,13 +439,13 @@ async function submit() {
   }
   const e = { id: uid(), date: d.date, type: M ? 'match' : 'practice', focus: d.focus.trim(), n1: d.n1, n2: d.n2, n3: d.n3,
     r1: d.n1 <= 2 ? d.r1.trim() : '', r2: d.n2 <= 2 ? d.r2.trim() : '', r3: d.n3 <= 2 ? d.r3.trim() : '',
-    next: d.next.trim(), at: new Date().toISOString() };
+    next: d.next.trim(), at: new Date().toISOString(), priv };
   if (M) Object.assign(e, { opp: d.opp.trim(), n4: d.n4, r4: d.n4 <= 2 ? d.r4.trim() : '', mgood: d.mgood.trim(), mbad: d.mbad.trim(), tgood: d.tgood.trim(), tbad: d.tbad.trim(), mprac: d.mprac.trim(), tocoach: d.tocoach.trim() });
   else Object.assign(e, { good: d.good.trim(), bad: d.bad.trim(), heard: d.heard.trim() });
   S.outbox.push(e); S.draft = null; store.del('draft'); save();
   $('#submit').disabled = true;
   await flush();
-  toast(S.outbox.some(x => x.id === e.id) ? '保存しました。ネットにつながったら送ります' : '提出しました');
+  toast(S.outbox.some(x => x.id === e.id) ? '保存しました。ネットにつながったら送ります' : priv ? '自分だけに残しました（先生には日付と数字だけ届きます）' : '提出しました');
   S.tab = 'history'; render(); window.scrollTo(0, 0);
 }
 
@@ -449,7 +456,19 @@ function replyHTML(r, coach) {
   return `<div class="coach"><span class="en">COACH</span>　${esc(r.by || '佐藤')}から${r.edited ? '<span class="mini">（直しました）</span>' : ''}\n${esc(r.text)}${coach && mineReply(r) ? `<div class="rbtns"><button class="mini-btn edit" data-rid="${r.id}">直す</button><button class="mini-btn del" data-rid="${r.id}">消す</button></div>` : ''}</div>`;
 }
 const isLow = e => fieldsOf(e).some(([n]) => e[n] && e[n] <= 2);
+/* 「自分だけに残す」は、受け口（GAS）が対応しているときだけ出す（古いGASだと中身が先生に見えてしまうため） */
+const privOK = () => (S.feat || []).includes('priv');
+const privTag = '<span class="tag me">自分だけ</span>';
+/* 顧問（と顧問が部員の画面で見るとき）に出す、自分だけの記録：日付と数字だけ */
+function privHTML(e, o) {
+  const M = e.type === 'match';
+  return `<div class="card ${o.coach && isLow(e) ? 'low' : ''}" data-id="${e.id}">
+    <div class="date"><span>${o.who ? `${esc(o.who)}　` : ''}${jdate(e.date)}${M ? ' <span class="tag match">MATCH</span>' : ''}${lateMark(e)}</span><span>${privTag}</span></div>
+    <div class="nums">意識できた <b>${e.n1}</b>　体の調子 <b>${e.n2}</b>　気持ち <b>${e.n3}</b>${M ? `　出来 <b>${e.n4}</b>` : ''}</div>
+    <div class="mini" style="margin-top:4px">記録しました。中身は本人のアプリだけに出ます（顧問の画面に届くのは日付と数字だけ）</div></div>`;
+}
 function entryHTML(e, o) {
+  if (e.priv && (o.coach || S.viewAs)) return privHTML(e, o);
   const rs = (o.replies || []);
   const M = e.type === 'match';
   const reasons = fieldsOf(e).filter(([n, , r]) => e[n] <= 2 && e[r]).map(([n, l, r]) => `<div class="kv lowr"><span class="k">${l} ${e[n]} の理由</span>${esc(e[r])}</div>`).join('');
@@ -459,14 +478,15 @@ function entryHTML(e, o) {
       ${M ? MQ.map(([k, q]) => e[k] ? `<div class="kv"><span class="k">${q}</span>${esc(e[k])}</div>` : '').join('') : ''}`;
   const toc = e.tocoach ? `<div class="kv tocoach"><span class="k">顧問に伝えたいこと</span>${esc(e.tocoach)}</div>` : '';
   return `<div class="card ${o.coach && isLow(e) ? 'low' : ''} ${o.open ? 'open' : ''}" data-id="${e.id}">
-    <div class="date"><span>${o.who ? `${esc(o.who)}　` : ''}${jdate(e.date)}${M ? ' <span class="tag match">MATCH</span>' : ''}${lateMark(e)}</span><span>${o.tag || ''}${o.coach || e._wait ? '' : starBtn(e)}</span></div>
+    <div class="date"><span>${o.who ? `${esc(o.who)}　` : ''}${jdate(e.date)}${M ? ' <span class="tag match">MATCH</span>' : ''}${lateMark(e)}</span><span>${e.priv ? privTag : ''}${o.tag || ''}${o.coach || e._wait ? '' : starBtn(e)}</span></div>
     <div class="kv"><span class="k">FOCUS　今日意識すること</span>${esc(e.focus)}</div>
     ${M ? `<div class="kv"><span class="k">MATCH　相手と結果</span>${esc(e.opp)}</div>` : ''}
     <div class="nums">意識できた <b>${e.n1}</b>　体の調子 <b>${e.n2}</b>　気持ち <b>${e.n3}</b>${M ? `　出来 <b>${e.n4}</b>` : ''}</div>
     ${o.coach ? reasons + toc : ''}
     <div class="more">${o.coach ? '' : reasons}${detail}${o.coach ? '' : toc}</div>
     <div class="kv"><span class="k">NEXT　次にどうする</span>${esc(e.next)}</div>
-    ${rs.map(r => replyHTML(r, o.coach)).join('') || (e._wait || o.coach ? '' : '<div class="mini" style="margin-top:6px">（返事はまだ）</div>')}
+    ${rs.map(r => replyHTML(r, o.coach)).join('') || (e._wait || o.coach || e.priv ? '' : '<div class="mini" style="margin-top:6px">（返事はまだ）</div>')}
+    ${e.priv && !o.coach ? `<div class="rbtns" style="margin-top:8px"><span class="mini" style="flex:1">先生の画面には日付と数字だけ出ています</span><button class="mini-btn save shareb" data-share="${e.id}">先生に見せる</button></div>` : ''}
     ${o.coach ? `<div class="q">${rs.length ? 'もう一言' : `COACH　${esc(S.name)}から`}</div><textarea class="rep" id="rep_${e.id}" placeholder="一言">${esc(S.repDraft[e.id] || '')}</textarea><button class="btn send" data-id="${e.id}" style="margin-top:8px;padding:11px">返事を送る</button>` : ''}
     <button class="toggle">${o.open ? '閉じる' : '全部の中身を見る'}</button></div>`;
 }
@@ -498,6 +518,15 @@ function historyList() {
 }
 function bindHistoryList() {
   bindCards();
+  document.querySelectorAll('.shareb').forEach(b => b.onclick = async ev => {
+    ev.stopPropagation(); if (S.viewAs) { toast('見るだけの画面です'); return; }
+    if (!confirm('この記録を先生に見せます。書いた中身も先生の画面に出ます。よいですか？')) return;
+    const id = b.dataset.share; const w = S.outbox.find(x => x.id === id);
+    if (w) { w.priv = false; save(); refreshList(); toast('先生に見せる形で送ります'); return; }
+    const e = S.entries.find(x => x.id === id); if (!e) return; b.disabled = true;
+    try { await api('share', { key: S.key, entryId: id }); e.priv = false; save(); refreshList(); toast('先生に見せました'); }
+    catch (err) { b.disabled = false; toast(err.server ? err.message : 'ネットにつながっていません。つながってからもう一度'); }
+  });
   document.querySelectorAll('.starb').forEach(b => b.onclick = async ev => {
     ev.stopPropagation(); if (S.viewAs) { toast('見るだけの画面です'); return; } const id = b.dataset.star; const e = S.entries.find(x => x.id === id); if (!e) return;
     const v = !e.star; e.star = v; save(); refreshList();
@@ -527,7 +556,7 @@ function bindFoot() {
 const cRepliesFor = id => S.cd.replies.filter(r => r.entryId === id).sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 const cSort = list => [...list].sort((a, b) => b.date.localeCompare(a.date) || (Date.parse(b.at) - Date.parse(a.at)));
 const memberName = uid => (S.cd.members.find(m => m.id === uid) || {}).name || '？';
-const unreplied = () => S.cd.entries.filter(e => !S.cd.replies.some(r => r.entryId === e.id));
+const unreplied = () => S.cd.entries.filter(e => !e.priv && !S.cd.replies.some(r => r.entryId === e.id));
 function bindReplies() {
   document.querySelectorAll('.mini-btn.edit').forEach(b => b.onclick = () => { S.editing = b.dataset.rid; render(); const t = $('#ed_' + S.editing); if (t) t.focus(); });
   document.querySelectorAll('.mini-btn.cancel').forEach(b => b.onclick = () => { S.editing = null; render(); });
@@ -618,7 +647,7 @@ function renderCoach() {
 function renderMembers() {
   const rows = S.cd.members.map(m => {
     const es = cSort(S.cd.entries.filter(e => e.uid === m.id)); const last = es[0];
-    const wait = es.filter(e => !S.cd.replies.some(r => r.entryId === e.id)).length;
+    const wait = es.filter(e => !e.priv && !S.cd.replies.some(r => r.entryId === e.id)).length;
     return `<div class="card member" data-uid="${m.id}"><div class="date"><span>${esc(m.name)}</span>${wait ? `<span class="tag">未返事 ${wait}</span>` : ''}</div>
       <div class="mini">記録 ${es.length}件　${last ? `最後 ${jdate(last.date)}` : 'まだ記録なし'}${cnotesOf(m.id).length ? `　顧問メモ ${cnotesOf(m.id).length}件` : ''}</div>
       ${last ? `<div class="nums">意識できた <b>${last.n1}</b>　体の調子 <b>${last.n2}</b>　気持ち <b>${last.n3}</b>${last.type === 'match' ? `　出来 <b>${last.n4}</b>` : ''}</div>` : ''}</div>`;
