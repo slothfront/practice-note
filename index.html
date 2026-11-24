@@ -103,6 +103,9 @@ textarea:focus,input:focus{outline:0;border-color:var(--main)}
 .ntext{white-space:pre-wrap;font-size:14px;line-height:1.6;margin-top:4px}
 details.oldn,details.who{margin:4px 0 8px}details.oldn summary,details.who summary{font-size:12px;color:var(--main,#1F4E79);cursor:pointer;padding:4px 0}
 /* 顧問の画面はパープル */
+html.is-coach nav{overflow-x:auto;scrollbar-width:none}html.is-coach nav::-webkit-scrollbar{display:none}html.is-coach nav button{flex:0 0 auto;padding:9px 13px;font-size:12.5px}
+.cnote{background:#fff;border-radius:14px;padding:10px 12px;margin-bottom:8px;box-shadow:0 2px 8px rgba(30,60,100,.07);border-left:6px solid var(--main)}
+.cnote.fresh{border-left-color:var(--acc2,#FFC000)}
 html.is-coach{--main:#5B4B9A;--soft:#EEEAF7;--line2:#DDD6EE;--bg:#F6F4FB;--btn:#5B4B9A;--btnshadow:#43376F}
 .vbar{background:var(--acc2,#FFE27A);color:#1a1a1a;font-size:13px;font-weight:700;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;z-index:6}
 .vbar button{border:2px solid #5B4B9A;background:#5B4B9A;color:#fff;border-radius:999px;padding:5px 12px;font:inherit;font-size:12px;font-weight:700;white-space:nowrap}
@@ -265,7 +268,7 @@ function forgetIfBadKey(e) {
 async function refresh() {
   if (S.viewAs) return true;
   if (S.role === 'coach') {
-    try { const j = await api('coachList', { key: S.key }); S.cd = { members: j.members, entries: j.entries, replies: j.replies, notices: j.notices || [], reads: j.reads || [], reports: parseReports(j.reports), jumps: j.jumps || [] }; if (j.me) { S.me = j.me; store.set('me', S.me); } store.set('cd', S.cd); return true; } catch (e) { forgetIfBadKey(e); return false; }
+    try { const j = await api('coachList', { key: S.key }); S.cd = { members: j.members, entries: j.entries, replies: j.replies, notices: j.notices || [], reads: j.reads || [], reports: parseReports(j.reports), jumps: j.jumps || [], coaches: j.coaches || [], cnotes: j.cnotes || [], creads: j.creads || [] }; if (j.me) { S.me = j.me; store.set('me', S.me); } store.set('cd', S.cd); return true; } catch (e) { forgetIfBadKey(e); return false; }
   }
   try {
     await flush();
@@ -284,7 +287,7 @@ function shell(sub, body) {
     (S.viewAs ? `<div class="vbar"><span>${esc(S.name)}の画面（見るだけ）</span><button id="vexit">顧問の画面にもどる</button></div>` : '') +
     `<header><div class="t en">PRACTICE NOTE</div><div class="s">${esc(sub)}</div></header>` +
     (S.key && !S.needSet ? (S.role === 'coach'
-      ? `<nav>${[['new', '新しい記録'], ['members', '部員ごと'], ['notice', 'お知らせ'], ['creport', 'レポート'], ['cjump', 'ジャンプ']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'new' && unreplied().length ? `<span class="badge">${unreplied().length}</span>` : ''}</button>`).join('')}</nav>`
+      ? `<nav>${[['new', '新しい記録'], ['members', '部員ごと'], ['notice', 'お知らせ'], ['creport', 'レポート'], ['cjump', 'ジャンプ'], ['cboard', '顧問']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'new' && unreplied().length ? `<span class="badge">${unreplied().length}</span>` : ''}${k === 'cboard' && unreadBoard().length ? `<span class="badge">${unreadBoard().length}</span>` : ''}</button>`).join('')}</nav>`
       : `<nav>${[['today', '今日の記録'], ['history', 'これまで'], ['graph', 'グラフ'], ['report', 'レポート']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'history' && n ? `<span class="badge">返事 ${n}</span>` : ''}${k === 'report' && unseenRep().length ? '<span class="badge">NEW</span>' : ''}${k === 'today' && S.tab !== 'today' && unseenN().length ? `<span class="badge">お知らせ</span>` : ''}</button>`).join('')}</nav>`) : '') +
     `<main>${body}</main>`;
   document.querySelectorAll('nav button').forEach(b => b.onclick = () => go(b.dataset.tab));
@@ -587,6 +590,7 @@ function renderCoach() {
   if (S.tab === 'notice') return renderNotices();
   if (S.tab === 'creport') return renderCoachReports();
   if (S.tab === 'cjump') return renderCoachJump();
+  if (S.tab === 'cboard') return renderBoard();
   if (S.tab === 'members') return S.member ? renderMember() : renderMembers();
   const list = cSort(S.showAll ? S.cd.entries : unreplied());
   const body = list.length ? list.map(e => entryHTML(e, { coach: true, open: true, who: memberName(e.uid), replies: cRepliesFor(e.id), tag: cRepliesFor(e.id).length ? '' : '<span class="tag">未返事</span>' })).join('')
@@ -602,7 +606,7 @@ function renderMembers() {
     const es = cSort(S.cd.entries.filter(e => e.uid === m.id)); const last = es[0];
     const wait = es.filter(e => !S.cd.replies.some(r => r.entryId === e.id)).length;
     return `<div class="card member" data-uid="${m.id}"><div class="date"><span>${esc(m.name)}</span>${wait ? `<span class="tag">未返事 ${wait}</span>` : ''}</div>
-      <div class="mini">記録 ${es.length}件　${last ? `最後 ${jdate(last.date)}` : 'まだ記録なし'}</div>
+      <div class="mini">記録 ${es.length}件　${last ? `最後 ${jdate(last.date)}` : 'まだ記録なし'}${cnotesOf(m.id).length ? `　顧問メモ ${cnotesOf(m.id).length}件` : ''}</div>
       ${last ? `<div class="nums">意識できた <b>${last.n1}</b>　体 <b>${last.n2}</b>　気持ち <b>${last.n3}</b>${last.type === 'match' ? `　出来 <b>${last.n4}</b>` : ''}</div>` : ''}</div>`;
   }).join('');
   shell('顧問用　' + S.name, `<div class="list">${rows || '<p class="mini center">部員がまだいません</p>'}</div><div class="foot"><button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);
@@ -613,9 +617,12 @@ function renderMember() {
   const es = cSort(S.cd.entries.filter(e => e.uid === S.member));
   shell('顧問用　' + memberName(S.member) + 'の記録', `<button class="link" id="back" style="margin-bottom:10px">← 部員ごとにもどる</button>
     <button class="btn ghost" id="viewas" style="margin:0 0 12px;padding:10px">この部員の画面で見る</button>
+    ${memoBlock(S.member)}
+    <div class="h"><span class="en">NOTES</span><span class="ja">記録</span></div>
     <div class="list">${es.map(e => entryHTML(e, { coach: true, replies: cRepliesFor(e.id), tag: cRepliesFor(e.id).length ? '' : '<span class="tag">未返事</span>' })).join('') || '<p class="mini center">まだ記録がありません</p>'}</div>`);
   $('#back').onclick = () => history.back();
   $('#viewas').onclick = () => { enterView(S.member); pushNav(); render(); window.scrollTo(0, 0); };
+  bindCnotes(S.member);
   bindCards(); bindReplies();
 }
 
@@ -921,6 +928,58 @@ function enterView(uid) {
 }
 function exitView() {
   if (!S.viewAs) return; const b = S.viewBak || {}; S.viewAs = null; VIEW_KEYS.forEach(k => { if (k in b) S[k] = b[k]; }); S.viewBak = null; S.tab = 'members';
+}
+
+/* ===== 顧問だけの場所：連絡ボード（uid=board）と部員ごとのメモ ===== */
+const cnotesOf = uid => (S.cd.cnotes || []).filter(n => n.uid === uid).sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+const cread = (id, uid) => (S.cd.creads || []).some(r => r.noteId === id && r.uid === uid);
+const unreadBoard = () => (S.cd.cnotes || []).filter(n => n.uid === 'board' && n.byId !== S.me && !cread(n.id, S.me));
+function cnoteCard(n, board) {
+  const mine = n.byId === S.me; const fresh = board && !mine && !cread(n.id, S.me);
+  const others = (S.cd.coaches || []).filter(c => c.id !== n.byId); const rd = others.filter(c => cread(n.id, c.id));
+  const body = S.editingC === n.id ? `<textarea class="redit" id="ced_${n.id}">${esc(n.text)}</textarea><div class="rbtns"><button class="mini-btn save csave" data-cid="${n.id}">保存</button><button class="mini-btn ccancel">やめる</button></div>`
+    : `<div class="ntext">${esc(n.text)}</div>${mine ? `<div class="rbtns"><button class="mini-btn cedit" data-cid="${n.id}">直す</button><button class="mini-btn del cdel" data-cid="${n.id}">消す</button></div>` : ''}`;
+  return `<div class="cnote ${fresh ? 'fresh' : ''}"><div class="date"><span>${esc(n.by)}　<span class="mini">${esc(jdate(localDate(n.at)))}${n.edited ? '（直しました）' : ''}</span></span>${fresh ? '<span class="tag">NEW</span>' : board && others.length ? `<span class="tag ${rd.length === others.length ? 'wait' : ''}">既読 ${rd.length}／${others.length}</span>` : ''}</div>${body}
+    ${board && others.length ? `<details class="who"><summary>だれが読んだか</summary><div class="mini">読んだ：${rd.map(c => esc(c.name)).join('・') || 'まだいない'}</div></details>` : ''}</div>`;
+}
+function memoBlock(uid) {
+  const list = cnotesOf(uid);
+  return `<div class="h"><span class="en">COACH MEMO</span><span class="ja">顧問だけのメモ（部員には見えません）</span></div>
+    <div class="card"><textarea id="cnew" placeholder="けが・面談・気づいたことなど">${esc((S.cDraft || {})[uid] || '')}</textarea><button class="btn" id="csend" style="margin-top:8px;padding:11px">メモを残す</button></div>
+    <div class="list" style="margin-top:8px">${list.map(n => cnoteCard(n, false)).join('') || '<p class="mini center">まだメモはありません</p>'}</div>`;
+}
+function bindCnotes(uid) {
+  const t = $('#cnew'); if (t) t.addEventListener('input', () => { S.cDraft = Object.assign({}, S.cDraft, { [uid]: t.value }); });
+  const sb = $('#csend'); if (sb) sb.onclick = async () => {
+    const text = $('#cnew').value.trim(); if (!text) { toast('書いてから送ってください'); return; }
+    sb.disabled = true;
+    try { const j = await api('cnote', { key: S.key, uid, text }); S.cd.cnotes = [...(S.cd.cnotes || []), j.note]; store.set('cd', S.cd); S.cDraft = Object.assign({}, S.cDraft, { [uid]: '' }); toast(uid === 'board' ? '送りました' : 'メモを残しました'); render(); }
+    catch (e) { sb.disabled = false; toast(e.server ? e.message : 'ネットにつながっていません。つながってからもう一度'); }
+  };
+  document.querySelectorAll('.cedit').forEach(b => b.onclick = () => { S.editingC = b.dataset.cid; render(); });
+  document.querySelectorAll('.ccancel').forEach(b => b.onclick = () => { S.editingC = null; render(); });
+  document.querySelectorAll('.csave').forEach(b => b.onclick = async () => {
+    const id = b.dataset.cid; const text = $('#ced_' + id).value.trim(); if (!text) { toast('空では保存できません。消すときは「消す」を'); return; }
+    b.disabled = true;
+    try { const j = await api('editCnote', { key: S.key, noteId: id, text }); S.cd.cnotes = S.cd.cnotes.map(n => n.id === id ? j.note : n); store.set('cd', S.cd); S.editingC = null; toast('直しました'); render(); }
+    catch (e) { b.disabled = false; toast(e.server ? e.message : 'ネットにつながっていません'); }
+  });
+  document.querySelectorAll('.cdel').forEach(b => b.onclick = async () => {
+    if (!confirm('このメモを消します。よいですか？')) return; const id = b.dataset.cid; b.disabled = true;
+    try { await api('deleteCnote', { key: S.key, noteId: id }); S.cd.cnotes = S.cd.cnotes.filter(n => n.id !== id); store.set('cd', S.cd); toast('消しました'); render(); }
+    catch (e) { b.disabled = false; toast(e.server ? e.message : 'ネットにつながっていません'); }
+  });
+}
+function renderBoard() {
+  const list = cnotesOf('board');
+  shell('顧問用　' + S.name, `<div class="h" style="margin-top:4px"><span class="en">COACHES</span><span class="ja">顧問の連絡ボード（部員には見えません）</span></div>
+    <div class="card"><textarea id="cnew" placeholder="ほかの先生への連絡・共有したいこと">${esc((S.cDraft || {}).board || '')}</textarea><button class="btn" id="csend" style="margin-top:8px;padding:11px">送る</button></div>
+    <div class="list" style="margin-top:10px">${list.map(n => cnoteCard(n, true)).join('') || '<p class="mini center">まだ書き込みはありません</p>'}</div>
+    <div class="h"><span class="en">MEMO</span><span class="ja">部員ごとのメモ</span></div><div class="mini">部員ごとのメモは「部員ごと」→部員を押した画面にあります</div>
+    <div class="foot"><button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);
+  bindCnotes('board'); bindFoot();
+  const ids = unreadBoard().map(n => n.id);
+  if (ids.length) api('cnoteRead', { key: S.key, ids }).then(() => { S.cd.creads = [...(S.cd.creads || []), ...ids.map(id => ({ noteId: id, uid: S.me }))]; store.set('cd', S.cd); }).catch(() => {});
 }
 
 function render() {

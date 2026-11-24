@@ -14,9 +14,11 @@ const COLS = {
   notices: ['id', 'to', 'text', 'at', 'by', 'byId', 'edited', 'targets'],
   reads: ['noticeId', 'uid', 'at'],
   reports: ['id', 'matchId', 'uid', 'at', 'by', 'j1', 'j2', 'j3', 'j4', 'j5', 'j6', 'j7', 'j8'],
-  jumps: ['id', 'uid', 'date', 'stand', 'run', 'reach', 'at', 'by']
+  jumps: ['id', 'uid', 'date', 'stand', 'run', 'reach', 'at', 'by'],
+  cnotes: ['id', 'uid', 'text', 'at', 'by', 'byId', 'edited'],
+  creads: ['noteId', 'uid', 'at']
 };
-const SHEET = { members: '部員', entries: '記録', replies: '返事', notices: 'お知らせ', reads: '既読', reports: 'レポート', jumps: 'ジャンプ' };
+const SHEET = { members: '部員', entries: '記録', replies: '返事', notices: 'お知らせ', reads: '既読', reports: 'レポート', jumps: 'ジャンプ', cnotes: '顧問メモ', creads: '顧問既読' };
 const CHUNK = 40000;  // 1マスに入れる文字数（表の1マスは5万文字まで）
 
 function setupPracticeNote() {
@@ -107,7 +109,9 @@ function handle_(b) {
     const replies = readAll_(book.getSheetByName(SHEET.replies)).map(cleanR_);
     const notices = readAll_(book.getSheetByName(SHEET.notices)).map(cleanN_);
     const reads = readAll_(book.getSheetByName(SHEET.reads)).map(r => ({ noticeId: String(r.noticeId), uid: String(r.uid) }));
-    return { ok: true, name: user.name, me: user.id, members, entries, replies, notices, reads, reports: reportsOf_(book), jumps: jumpsOf_(book) };
+    return { ok: true, name: user.name, me: user.id, members, entries, replies, notices, reads, reports: reportsOf_(book), jumps: jumpsOf_(book),
+      coaches: readAll_(book.getSheetByName(SHEET.members)).filter(r => r['役割'] === 'coach' && r['名前']).map(r => ({ id: String(r.id), name: String(r['名前']) })),
+      cnotes: readAll_(book.getSheetByName(SHEET.cnotes)).map(cleanC_), creads: readAll_(book.getSheetByName(SHEET.creads)).map(r => ({ noteId: String(r.noteId), uid: String(r.uid) })) };
   }
   if (a === 'reply' && coach) {
     const text = String(b.text || '').trim();
@@ -238,6 +242,40 @@ function handle_(b) {
     return withLock_(() => { const sh = book.getSheetByName(SHEET.jumps); const v = sh.getDataRange().getValues(); const ci = v[0].indexOf('date');
       for (let i = v.length - 1; i >= 1; i--) if (dstr_(v[i][ci]) === d) sh.deleteRow(i + 1); return { ok: true }; });
   }
+  /* 顧問だけ：連絡ボード（uid=board）と部員ごとのメモ（uid=部員のid）。部員の list には出さない */
+  if (a === 'cnote' && coach) {
+    const text = String(b.text || '').trim(); const to = String(b.uid || '');
+    if (!text) return { ok: false, error: '空では送れません' };
+    const ids = new Set(readAll_(book.getSheetByName(SHEET.members)).filter(m => m['役割'] !== 'coach' && m['名前']).map(m => String(m.id)));
+    if (!(to === 'board' || ids.has(to))) return { ok: false, error: '置き場所がちがいます' };
+    return withLock_(() => {
+      const n = { id: 'c' + Utilities.getUuid().slice(0, 8), uid: to, text: clip_(text), at: new Date().toISOString(), by: user.name, byId: user.id, edited: '' };
+      book.getSheetByName(SHEET.cnotes).appendRow(COLS.cnotes.map(c => n[c]));
+      return { ok: true, note: cleanC_(n) };
+    });
+  }
+  if ((a === 'editCnote' || a === 'deleteCnote') && coach) {
+    return withLock_(() => {
+      const sh = book.getSheetByName(SHEET.cnotes); const v = sh.getDataRange().getValues(); const h = v[0]; const ci = name => h.indexOf(name);
+      for (let i = 1; i < v.length; i++) {
+        if (String(v[i][ci('id')]) !== String(b.noteId)) continue;
+        if (String(v[i][ci('byId')]) !== user.id) return { ok: false, error: '書いた先生だけが直せます' };
+        if (a === 'deleteCnote') { sh.deleteRow(i + 1); return { ok: true }; }
+        const text = String(b.text || '').trim(); if (!text) return { ok: false, error: '空では保存できません' };
+        const now = new Date().toISOString();
+        sh.getRange(i + 1, ci('text') + 1).setValue(clip_(text)); sh.getRange(i + 1, ci('edited') + 1).setValue(now);
+        const o = {}; h.forEach((k, j) => o[k] = v[i][j]); o.text = clip_(text); o.edited = now; return { ok: true, note: cleanC_(o) };
+      }
+      return { ok: false, error: 'メモが見つかりません' };
+    });
+  }
+  if (a === 'cnoteRead' && coach) {
+    const ids = (b.ids || []).map(String).slice(0, 200);
+    return withLock_(() => {
+      const sh = book.getSheetByName(SHEET.creads); const have = new Set(readAll_(sh).filter(r => String(r.uid) === user.id).map(r => String(r.noteId)));
+      const now = new Date().toISOString(); ids.filter(id => !have.has(id)).forEach(id => sh.appendRow([id, user.id, now])); return { ok: true };
+    });
+  }
   if (a === 'deleteReports' && coach) {
     const mid = String(b.matchId || ''); if (!mid) return { ok: false, error: '試合がちがいます' };
     return withLock_(() => { deleteReportRows_(book, mid); return { ok: true }; });
@@ -309,6 +347,7 @@ function clean_(r) {
   return o;
 }
 function cleanR_(r) { return { id: String(r.id), entryId: String(r.entryId), text: String(r.text).replace(/^'/, ''), at: String(r.at), by: String(r.by || '佐藤'), byId: String(r.byId || ''), edited: String(r.edited || '') }; }
+function cleanC_(n) { return { id: String(n.id), uid: String(n.uid), text: String(n.text).replace(/^'/, ''), at: String(n.at), by: String(n.by || ''), byId: String(n.byId || ''), edited: String(n.edited || '') }; }
 function cleanN_(n) { return { id: String(n.id), to: String(n.to), targets: String(n.targets || ''), text: String(n.text).replace(/^'/, ''), at: String(n.at), by: String(n.by || '佐藤'), byId: String(n.byId || ''), edited: String(n.edited || '') }; }
 /** 学年の欄から数字だけ取り出す（「2」「2年」どちらでも） */
 function gradeOf_(v) { const m = String(v == null ? '' : v).normalize('NFKC').match(/[1-3]/); return m ? m[0] : ''; }
