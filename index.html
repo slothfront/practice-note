@@ -275,7 +275,15 @@ function shell(sub, body) {
     `<main>${body}</main>`;
   document.querySelectorAll('nav button').forEach(b => b.onclick = () => go(b.dataset.tab));
 }
-function go(tab) { saveDraft(); S.tab = tab; S.member = null; render(); window.scrollTo(0, 0); }
+/* ---- スマホの戻るボタン：画面を切り替えるたびに履歴を1つ積み、戻るで前の画面にもどす ---- */
+const navState = () => ({ pn: 1, tab: S.tab, member: S.member || null, cview: S.cview || null, pview: S.imp && S.imp.view != null ? S.imp.view : null });
+function pushNav() { try { history.pushState(navState(), ''); } catch (e) {} }
+window.addEventListener('popstate', ev => {
+  const st = ev.state; if (!st || !st.pn || !S.key) return;
+  saveDraft(); S.tab = st.tab; S.member = st.member; S.cview = st.cview; if (S.imp) S.imp.view = st.pview;
+  render(); window.scrollTo(0, 0);
+});
+function go(tab) { saveDraft(); S.tab = tab; S.member = null; S.cview = null; if (S.imp) S.imp.view = null; pushNav(); render(); window.scrollTo(0, 0); }
 
 function renderLogin(err) {
   shell('君商 女子バレー部', `<div class="login"><div class="big en">PRACTICE NOTE</div>
@@ -288,7 +296,7 @@ function renderLogin(err) {
   $('#go').onclick = async () => {
     const key = $('#pw').value.trim(); if (!key) return;
     $('#go').disabled = true;
-    try { const j = await api('login', { key }); S.key = key; S.name = j.name; S.role = j.role || 'student'; S.me = j.me || ''; store.set('me', S.me); store.set('key', key); store.set('name', j.name); store.set('role', S.role); if (j.needSet) { S.needSet = true; store.set('needSet', true); render(); return; } await refresh(); S.tab = S.role === 'coach' ? 'new' : 'today'; render(); if (S.role !== 'coach') { const n = unseen().length; if (n) toast(`先生からの返事が${n}件あります`); } }
+    try { const j = await api('login', { key }); S.key = key; S.name = j.name; S.role = j.role || 'student'; S.me = j.me || ''; store.set('me', S.me); store.set('key', key); store.set('name', j.name); store.set('role', S.role); if (j.needSet) { S.needSet = true; store.set('needSet', true); render(); return; } await refresh(); S.tab = S.role === 'coach' ? 'new' : 'today'; try { history.replaceState(navState(), ''); } catch (e) {} render(); if (S.role !== 'coach') { const n = unseen().length; if (n) toast(`先生からの返事が${n}件あります`); } }
     catch (e) { renderLogin(e.server ? '合言葉がちがいます。もう一度確かめてください' : 'ネットにつながっていません。つながる所でもう一度'); }
   };
 }
@@ -306,7 +314,7 @@ function renderSetKey(err) {
     if (a.length < 4 || a.length > 30 || /\s/.test(a)) return renderSetKey('4〜30文字、空白なしで決めてください');
     if (a !== b) return renderSetKey('2回の合言葉がちがいます');
     $('#setk').disabled = true;
-    try { await api('setKey', { key: S.key, newKey: a }); S.key = a; store.set('key', a); S.needSet = false; store.del('needSet'); await refresh(); S.tab = S.role === 'coach' ? 'new' : 'today'; render(); toast('合言葉を決めました'); }
+    try { await api('setKey', { key: S.key, newKey: a }); S.key = a; store.set('key', a); S.needSet = false; store.del('needSet'); await refresh(); S.tab = S.role === 'coach' ? 'new' : 'today'; try { history.replaceState(navState(), ''); } catch (e) {} render(); toast('合言葉を決めました'); }
     catch (e) { renderSetKey(e.server ? e.message : 'ネットにつながっていません。つながる所でもう一度'); }
   };
 }
@@ -578,14 +586,14 @@ function renderMembers() {
       ${last ? `<div class="nums">意識できた <b>${last.n1}</b>　体 <b>${last.n2}</b>　気持ち <b>${last.n3}</b>${last.type === 'match' ? `　出来 <b>${last.n4}</b>` : ''}</div>` : ''}</div>`;
   }).join('');
   shell('顧問用　' + S.name, `<div class="list">${rows || '<p class="mini center">部員がまだいません</p>'}</div><div class="foot"><button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);
-  document.querySelectorAll('.member').forEach(c => c.onclick = () => { S.member = c.dataset.uid; render(); window.scrollTo(0, 0); });
+  document.querySelectorAll('.member').forEach(c => c.onclick = () => { S.member = c.dataset.uid; pushNav(); render(); window.scrollTo(0, 0); });
   bindFoot();
 }
 function renderMember() {
   const es = cSort(S.cd.entries.filter(e => e.uid === S.member));
   shell('顧問用　' + memberName(S.member) + 'の記録', `<button class="link" id="back" style="margin-bottom:10px">← 部員ごとにもどる</button>
     <div class="list">${es.map(e => entryHTML(e, { coach: true, replies: cRepliesFor(e.id), tag: cRepliesFor(e.id).length ? '' : '<span class="tag">未返事</span>' })).join('') || '<p class="mini center">まだ記録がありません</p>'}</div>`);
-  $('#back').onclick = () => { S.member = null; render(); };
+  $('#back').onclick = () => history.back();
   bindCards(); bindReplies();
 }
 
@@ -737,7 +745,7 @@ function renderCoachReports() {
     catch (e) { toast('レポートのファイルではないようです'); }
   };
   document.querySelectorAll('.rmap').forEach(sel => sel.onchange = () => { S.imp.map[Number(sel.dataset.i)] = sel.value; });
-  document.querySelectorAll('.rview').forEach(b => b.onclick = () => { S.imp.view = Number(b.dataset.i); render(); });
+  document.querySelectorAll('.rview').forEach(b => b.onclick = () => { S.imp.view = Number(b.dataset.i); pushNav(); render(); });
   const c = $('#rcancel'); if (c) c.onclick = () => { S.imp = null; render(); };
   const sbtn = $('#rsend'); if (sbtn) sbtn.onclick = async () => {
     const I = S.imp; const used = I.map.filter(Boolean);
@@ -756,8 +764,8 @@ function renderCoachReports() {
     try { await api('deleteReports', { key: S.key, matchId: mid }); S.cd.reports = (S.cd.reports || []).filter(r => r.matchId !== mid); store.set('cd', S.cd); toast('消しました'); render(); }
     catch (e) { b.disabled = false; toast(e.server ? e.message : 'ネットにつながっていません'); }
   });
-  document.querySelectorAll('.cview').forEach(b => b.onclick = () => { S.cview = { mid: b.dataset.mid, uid: b.dataset.uid }; render(); const h = $('#cviewh'); if (h) window.scrollTo(0, h.getBoundingClientRect().top + window.scrollY - 120); });
-  ['#cvclose', '#cvclose2'].forEach(q => { const x = $(q); if (x) x.onclick = () => { S.cview = null; render(); }; });
+  document.querySelectorAll('.cview').forEach(b => b.onclick = () => { S.cview = { mid: b.dataset.mid, uid: b.dataset.uid }; pushNav(); render(); const h = $('#cviewh'); if (h) window.scrollTo(0, h.getBoundingClientRect().top + window.scrollY - 120); });
+  ['#cvclose', '#cvclose2'].forEach(q => { const x = $(q); if (x) x.onclick = () => history.back(); });
   bindFoot(); if (I && I.view != null) { const h = document.querySelectorAll('.h'); const last = [...h].find(x => x.textContent.includes('PREVIEW')); if (last) last.scrollIntoView(); }
 }
 
@@ -773,6 +781,7 @@ function render() {
 
 window.addEventListener('online', async () => { await refresh(); render(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveDraft(); });
+try { history.replaceState(navState(), ''); } catch (e) {}
 render();
 if (S.key && S.role === 'coach') refresh().then(ok => { if (ok) render(); });
 else if (S.key) refresh().then(ok => { if (!ok) return; const n = unseen().length, m = unseenN().length; if (S.tab !== 'today' || m) render(); if (n) toast(`先生からの返事が${n}件あります`); });
