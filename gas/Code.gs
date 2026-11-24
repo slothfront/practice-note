@@ -101,14 +101,15 @@ function handle_(b) {
     const replies = readAll_(book.getSheetByName(SHEET.replies)).filter(r => ids.has(r.entryId)).map(cleanR_);
     const notices = readAll_(book.getSheetByName(SHEET.notices)).filter(n => forUser_(n, user)).map(cleanN_);
     const reports = reportsOf_(book).filter(r => r.uid === user.id || r.uid === 'team');
-    return { ok: true, name: user.name, entries, replies, notices, reports, jumps: jumpsOf_(book) };
+    const readN = readAll_(book.getSheetByName(SHEET.reads)).filter(r => String(r.uid) === user.id).map(r => ({ noticeId: String(r.noticeId), at: String(r.at || '') }));
+    return { ok: true, name: user.name, entries, replies, notices, readN, reports, jumps: jumpsOf_(book) };
   }
   if (a === 'coachList' && coach) {
     const members = readAll_(book.getSheetByName(SHEET.members)).filter(r => r['役割'] !== 'coach' && r['名前']).map(r => ({ id: String(r.id), name: String(r['名前']), grade: gradeOf_(r['学年']) }));
     const entries = readAll_(book.getSheetByName(SHEET.entries)).map(r => Object.assign(clean_(r), { uid: String(r.uid) }));
     const replies = readAll_(book.getSheetByName(SHEET.replies)).map(cleanR_);
     const notices = readAll_(book.getSheetByName(SHEET.notices)).map(cleanN_);
-    const reads = readAll_(book.getSheetByName(SHEET.reads)).map(r => ({ noticeId: String(r.noticeId), uid: String(r.uid) }));
+    const reads = readAll_(book.getSheetByName(SHEET.reads)).map(r => ({ noticeId: String(r.noticeId), uid: String(r.uid), at: String(r.at || '') }));
     return { ok: true, name: user.name, me: user.id, members, entries, replies, notices, reads, reports: reportsOf_(book), jumps: jumpsOf_(book),
       coaches: readAll_(book.getSheetByName(SHEET.members)).filter(r => r['役割'] === 'coach' && r['名前']).map(r => ({ id: String(r.id), name: String(r['名前']) })),
       cnotes: readAll_(book.getSheetByName(SHEET.cnotes)).map(cleanC_), creads: readAll_(book.getSheetByName(SHEET.creads)).map(r => ({ noteId: String(r.noteId), uid: String(r.uid) })) };
