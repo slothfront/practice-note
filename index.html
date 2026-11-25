@@ -44,6 +44,7 @@ textarea:focus,input:focus{outline:2px solid var(--blue);border-color:var(--blue
 .tag{background:var(--yellow);font-size:10px;font-weight:800;padding:2px 7px;border-radius:9px;font-family:Arial;color:#000;white-space:nowrap}
 .tag.wait{background:var(--pale);color:var(--navy)}
 .tcount .tnum{display:flex;align-items:baseline;gap:4px;margin-bottom:6px}.tcount .tnum b{font-size:34px;font-family:Arial;color:var(--main);line-height:1}.tcount .tnum span{font-size:14px;color:var(--gray)}.tcount .trow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px}.tcount .trow .k{font-size:12px;font-weight:700;color:var(--gray);width:44px}.tname{border:1px solid var(--line2);background:#fff;border-radius:999px;padding:4px 10px;font:inherit;font-size:13px;color:var(--ink2);cursor:pointer}
+.ev{display:flex;gap:10px;padding:5px 0;border-top:1px dashed var(--line2);font-size:14px;line-height:1.5}.ev:first-of-type{border-top:0}.evt{flex:0 0 92px;color:var(--gray);font-size:12.5px;padding-top:1px}.evn{flex:1;font-weight:700;color:var(--ink2)}.sday{margin-bottom:10px}.sday.stoday{border-left:6px solid var(--acc2)}.soon{width:100%;text-align:left;font:inherit;cursor:pointer;display:block;border:0}.soon .sdh{font-size:12px;font-weight:800;color:var(--main);margin-top:4px}
 .tag.me{background:#E6E6E6!important;color:#444!important}.privnote{background:var(--soft);border-radius:12px;padding:10px 12px;font-size:12.5px;line-height:1.6;margin:14px 0 4px}.btn.ghost2{background:#fff;color:var(--main);border:2px solid var(--main);box-shadow:none;margin-top:10px}
 .nums{display:flex;gap:12px;font-size:12px;margin:6px 0;flex-wrap:wrap}.nums b{color:var(--navy);font-size:14px}
 .kv{font-size:13px;margin:4px 0;line-height:1.5}.kv .k{color:var(--gray);font-size:11px;display:block}
@@ -106,7 +107,7 @@ textarea:focus,input:focus{outline:0;border-color:var(--main)}
 .ntext{white-space:pre-wrap;font-size:14px;line-height:1.6;margin-top:4px}
 details.oldn,details.who{margin:4px 0 8px}details.oldn summary,details.who summary{font-size:12px;color:var(--main,#1F4E79);cursor:pointer;padding:4px 0}
 /* 顧問の画面はパープル */
-nav{overflow-x:auto;scrollbar-width:none}nav::-webkit-scrollbar{display:none}nav button{flex:1 1 auto;padding:9px 6px;font-size:12.5px;white-space:nowrap}html.is-coach nav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;overflow:visible;top:72px}html.is-coach nav button{padding:9px 4px;font-size:13px}
+nav{overflow-x:auto;scrollbar-width:none}nav::-webkit-scrollbar{display:none}nav button{flex:1 1 auto;padding:9px 6px;font-size:12.5px;white-space:nowrap}nav.six,html.is-coach nav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;overflow:visible;top:72px}nav.six button,html.is-coach nav button{padding:9px 4px;font-size:13px}
 .cnote{background:#fff;border-radius:14px;padding:10px 12px;margin-bottom:8px;box-shadow:0 2px 8px rgba(30,60,100,.07);border-left:6px solid var(--main)}
 .cnote.fresh{border-left-color:var(--acc2,#FFC000)}
 html.is-coach{--main:#5B4B9A;--soft:#EEEAF7;--line2:#DDD6EE;--bg:#F6F4FB;--btn:#5B4B9A;--btnshadow:#43376F}
@@ -224,7 +225,7 @@ async function demoApi(action, b) {
 /* ===== 状態 ===== */
 const S = {
   key: store.get('key', ''), name: store.get('name', ''), role: store.get('role', 'student'), needSet: store.get('needSet', false), me: store.get('me', ''), editing: null, editingN: null, notices: store.get('notices', []), seenN: store.get('seenN', []), reportedN: store.get('reportedN', []),
-  cd: store.get('cd', { members: [], entries: [], replies: [] }), reports: store.get('reports', []), jumps: store.get('jumps', []), readN: store.get('readN', []), feat: store.get('feat', []), seenRep: store.get('seenRep', []), imp: null, member: null, showAll: false, repDraft: {},
+  cd: store.get('cd', { members: [], entries: [], replies: [] }), reports: store.get('reports', []), jumps: store.get('jumps', []), readN: store.get('readN', []), feat: store.get('feat', []), sched: store.get('sched', []), seenRep: store.get('seenRep', []), imp: null, member: null, showAll: false, repDraft: {},
   entries: store.get('entries', []), replies: store.get('replies', []),
   outbox: store.get('outbox', []), seen: store.get('seen', []),
   tab: 'today', draft: store.get('draft', null), justSeen: [], hmode: store.get('hmode', 'all'), hq: '', starOnly: false
@@ -277,12 +278,12 @@ function forgetIfBadKey(e) {
 async function refresh() {
   if (S.viewAs) return true;
   if (S.role === 'coach') {
-    try { const j = await api('coachList', { key: S.key }); S.cd = { members: j.members, entries: j.entries, replies: j.replies, notices: j.notices || [], reads: j.reads || [], reports: parseReports(j.reports), jumps: j.jumps || [], coaches: j.coaches || [], cnotes: j.cnotes || [], creads: j.creads || [] }; if (j.me) { S.me = j.me; store.set('me', S.me); } store.set('cd', S.cd); return true; } catch (e) { forgetIfBadKey(e); return false; }
+    try { const j = await api('coachList', { key: S.key }); S.cd = { schedule: j.schedule || [], members: j.members, entries: j.entries, replies: j.replies, notices: j.notices || [], reads: j.reads || [], reports: parseReports(j.reports), jumps: j.jumps || [], coaches: j.coaches || [], cnotes: j.cnotes || [], creads: j.creads || [] }; if (j.me) { S.me = j.me; store.set('me', S.me); } store.set('cd', S.cd); return true; } catch (e) { forgetIfBadKey(e); return false; }
   }
   try {
     await flush();
     const j = await api('list', { key: S.key });
-    S.feat = j.feat || []; store.set('feat', S.feat); S.entries = (j.entries || []).map(e => Object.assign(e, { star: e.star === true || e.star === '1' || e.star === 1, priv: e.priv === true || e.priv === '1' })); S.replies = j.replies; S.notices = j.notices || []; S.readN = j.readN || []; store.set('readN', S.readN); S.reports = parseReports(j.reports); S.jumps = j.jumps || []; store.set('jumps', S.jumps); if (j.name) { S.name = j.name; store.set('name', j.name); }
+    S.feat = j.feat || []; store.set('feat', S.feat); S.sched = j.schedule || []; store.set('sched', S.sched); S.entries = (j.entries || []).map(e => Object.assign(e, { star: e.star === true || e.star === '1' || e.star === 1, priv: e.priv === true || e.priv === '1' })); S.replies = j.replies; S.notices = j.notices || []; S.readN = j.readN || []; store.set('readN', S.readN); S.reports = parseReports(j.reports); S.jumps = j.jumps || []; store.set('jumps', S.jumps); if (j.name) { S.name = j.name; store.set('name', j.name); }
     save(); return true;
   } catch (e) { forgetIfBadKey(e); return false; }
 }
@@ -297,7 +298,7 @@ function shell(sub, body) {
     `<header><div class="t en">PRACTICE NOTE</div><div class="s">${esc(sub)}</div></header>` +
     (S.key && !S.needSet ? (S.role === 'coach'
       ? `<nav>${[['new', '新しい記録'], ['members', '部員ごと'], ['notice', 'お知らせ'], ['creport', 'レポート'], ['cjump', 'ジャンプ'], ['cboard', '顧問']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'new' && unreplied().length ? `<span class="badge">${unreplied().length}</span>` : ''}${k === 'cboard' && unreadBoard().length ? `<span class="badge">${unreadBoard().length}</span>` : ''}</button>`).join('')}</nav>`
-      : `<nav>${[['today', '今日の記録'], ['history', 'これまで'], ['graph', 'グラフ'], ['report', 'レポート'], ['snotice', 'お知らせ']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'history' && n ? `<span class="badge">返事 ${n}</span>` : ''}${k === 'report' && unseenRep().length ? '<span class="badge">NEW</span>' : ''}${k === 'snotice' && unseenN().length ? `<span class="badge">${unseenN().length}</span>` : ''}</button>`).join('')}</nav>`) : '') +
+      : `<nav class="six">${[['today', '今日の記録'], ['history', 'これまで'], ['graph', 'グラフ'], ['report', 'レポート'], ['snotice', 'お知らせ'], ['sched', '予定']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'history' && n ? `<span class="badge">返事 ${n}</span>` : ''}${k === 'report' && unseenRep().length ? '<span class="badge">NEW</span>' : ''}${k === 'snotice' && unseenN().length ? `<span class="badge">${unseenN().length}</span>` : ''}</button>`).join('')}</nav>`) : '') +
     `<main>${body}</main>`;
   document.querySelectorAll('nav button').forEach(b => b.onclick = () => go(b.dataset.tab));
   const vx = $('#vexit'); if (vx) vx.onclick = () => { exitView(); pushNav(); render(); window.scrollTo(0, 0); };
@@ -385,6 +386,7 @@ function renderToday() {
   const noticeBlock = nNew.length ? `<button class="notice fresh" id="toN" style="width:100%;text-align:left;font:inherit;cursor:pointer"><div class="date"><span>顧問からのお知らせ　未読 <b>${nNew.length}件</b></span><span class="tag">未読</span></div><div class="mini">押すとお知らせのタブを開きます</div></button>` : '';
   shell(`${jdate(today())}　${S.name}`, `
   ${noticeBlock}
+  ${schedSoon()}
   ${lastMatchCard()}
   ${S.outbox.length ? `<div class="pending">送信待ち ${S.outbox.length}件。ネットにつながったら自動で送ります</div>` : ''}
   <div class="h" style="margin-top:4px"><span class="en">DATE</span><span class="ja">記録する日</span></div><div class="hint">書き忘れた日は、日付を変えるとあとから書けます</div>
@@ -421,6 +423,7 @@ function renderToday() {
   const dt = $('#dtoday'); if (dt) dt.onclick = () => setDate(today());
   const tr = $('#toRep'); if (tr) tr.onclick = () => go('report');
   const tn = $('#toN'); if (tn) tn.onclick = () => go('snotice');
+  const ts = $('#toSched'); if (ts) ts.onclick = () => go('sched');
 }
 async function submit(priv) {
   if (S.viewAs) { toast('見るだけの画面です。提出はできません'); return; }
@@ -975,7 +978,7 @@ function renderCoachJump() {
 }
 
 /* ===== 顧問：部員の画面で見る（見るだけ。データは顧問の一覧から作る） ===== */
-const VIEW_KEYS = ['readN', 'entries', 'replies', 'notices', 'reports', 'jumps', 'name', 'me', 'role', 'tab', 'seen', 'seenN', 'seenRep', 'draft', 'outbox', 'member', 'cview', 'hq', 'starOnly', 'hmode'];
+const VIEW_KEYS = ['sched', 'readN', 'entries', 'replies', 'notices', 'reports', 'jumps', 'name', 'me', 'role', 'tab', 'seen', 'seenN', 'seenRep', 'draft', 'outbox', 'member', 'cview', 'hq', 'starOnly', 'hmode'];
 function enterView(uid) {
   const m = (S.cd.members || []).find(x => x.id === uid); if (!m) return;
   S.viewBak = {}; VIEW_KEYS.forEach(k => S.viewBak[k] = S[k]);
@@ -984,7 +987,7 @@ function enterView(uid) {
   const ids = new Set(es.map(e => e.id));
   const forMe = n => n.to === 'all' || n.to === uid || (/^grade:/.test(n.to) && String(n.targets || '').split(',').includes(uid));
   S.entries = es; S.replies = (S.cd.replies || []).filter(r => ids.has(r.entryId)); S.notices = (S.cd.notices || []).filter(forMe);
-  S.reports = (S.cd.reports || []).filter(r => r.uid === uid || r.uid === 'team'); S.jumps = S.cd.jumps || [];
+  S.reports = (S.cd.reports || []).filter(r => r.uid === uid || r.uid === 'team'); S.jumps = S.cd.jumps || []; S.sched = S.cd.schedule || [];
   S.name = m.name; S.me = uid; S.role = 'student'; S.tab = 'today'; S.member = null; S.cview = null; S.hq = ''; S.starOnly = false; S.hmode = 'all';
   S.seen = S.replies.map(rkey); S.seenN = S.notices.map(nkey); S.readN = (S.cd.reads || []).filter(r => r.uid === uid).map(r => ({ noticeId: r.noticeId, at: r.at || '' })); S.seenRep = S.reports.map(rkeyRep); S.draft = null; S.outbox = [];
 }
@@ -1049,6 +1052,25 @@ function renderBoard() {
   if (ids.length) api('cnoteRead', { key: S.key, ids }).then(() => { S.cd.creads = [...(S.cd.creads || []), ...ids.map(id => ({ noteId: id, uid: S.me }))]; store.set('cd', S.cd); }).catch(() => {});
 }
 
+/* ===== 予定（顧問のGoogleカレンダー「部活」から。説明欄は来ない） ===== */
+const addDays = (ymd, n) => { const [y, m, d] = ymd.split('-').map(Number); const x = new Date(y, m - 1, d + n); return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`; };
+const schedOn = ymd => (S.sched || []).filter(e => e.date <= ymd && ymd <= (e.end || e.date));
+const evHTML = e => `<div class="ev"><span class="evt">${e.allDay ? '終日' : esc(e.start) + (e.endTime ? '〜' + esc(e.endTime) : '')}</span><span class="evn">${esc(e.title)}${e.place ? `<span class="mini">　${esc(e.place)}</span>` : ''}</span></div>`;
+function schedSoon() {
+  const t = today(), tm = addDays(t, 1); const a = schedOn(t), b = schedOn(tm);
+  if (!a.length && !b.length) return '';
+  return `<button class="card soon" id="toSched">${a.length ? `<div class="sdh">今日の予定</div>${a.map(evHTML).join('')}` : ''}${b.length ? `<div class="sdh">明日 ${esc(jdate(tm))}</div>${b.map(evHTML).join('')}` : ''}<div class="mini" style="margin-top:4px">押すと予定のタブを開きます</div></button>`;
+}
+function renderSchedule() {
+  const t = today(); const days = [];
+  for (let i = 0; i < 21; i++) { const d = addDays(t, i); const es = schedOn(d); if (es.length) days.push([d, es]); }
+  shell(S.name, `<div class="h" style="margin-top:4px"><span class="en">SCHEDULE</span><span class="ja">予定（3週間先まで）</span></div>
+    ${days.length ? days.map(([d, es]) => `<div class="card sday ${d === t ? 'stoday' : ''}"><div class="date"><span>${jdate(d)}</span>${d === t ? '<span class="tag">今日</span>' : d === addDays(t, 1) ? '<span class="tag wait">明日</span>' : ''}</div>${es.map(evHTML).join('')}</div>`).join('')
+      : '<p class="mini center" style="margin:24px 0">3週間先までの予定はまだありません</p>'}
+    <div class="foot"><button class="link" id="reload">最新にする</button></div>`);
+  bindFoot();
+}
+
 /* ===== 部員：お知らせのタブ（未読と既読に分ける。「既読にする」で既読へ移る） ===== */
 function renderStudentNotices() {
   const nNew = unseenN().sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
@@ -1076,6 +1098,7 @@ function render() {
   if (S.tab === 'graph') return renderGraph();
   if (S.tab === 'report') return renderReports();
   if (S.tab === 'snotice') return renderStudentNotices();
+  if (S.tab === 'sched') return renderSchedule();
   return renderToday();
 }
 
@@ -1083,7 +1106,7 @@ window.addEventListener('online', async () => { await refresh(); render(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveDraft(); });
 /* 更新（再読み込み）しても同じ画面にとどまる：履歴に残した画面と、閉じる前のスクロール位置から戻す */
 const st0 = (() => { try { return history.state; } catch (e) { return null; } })();
-const TABS = { coach: ['new', 'members', 'notice', 'creport', 'cjump', 'cboard'], student: ['today', 'history', 'graph', 'report', 'snotice'] };
+const TABS = { coach: ['new', 'members', 'notice', 'creport', 'cjump', 'cboard'], student: ['today', 'history', 'graph', 'report', 'snotice', 'sched'] };
 if (S.key && !S.needSet && st0 && st0.pn) {
   if (S.role === 'coach' && st0.viewAs && (S.cd.members || []).some(m => m.id === st0.viewAs)) enterView(st0.viewAs);
   const ok = TABS[S.role === 'coach' ? 'coach' : 'student'];

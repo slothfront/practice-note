@@ -105,7 +105,7 @@ function handle_(b) {
     const notices = readAll_(book.getSheetByName(SHEET.notices)).filter(n => forUser_(n, user)).map(cleanN_);
     const reports = reportsOf_(book).filter(r => r.uid === user.id || r.uid === 'team');
     const readN = readAll_(book.getSheetByName(SHEET.reads)).filter(r => String(r.uid) === user.id).map(r => ({ noticeId: String(r.noticeId), at: String(r.at || '') }));
-    return { ok: true, name: user.name, entries, replies, notices, readN, reports, jumps: jumpsOf_(book), feat: ['priv'] };
+    return { ok: true, name: user.name, entries, replies, notices, readN, reports, jumps: jumpsOf_(book), feat: ['priv'], schedule: schedule_() };
   }
   if (a === 'coachList' && coach) {
     const members = readAll_(book.getSheetByName(SHEET.members)).filter(r => r['役割'] !== 'coach' && r['名前']).map(r => ({ id: String(r.id), name: String(r['名前']), grade: gradeOf_(r['学年']), last: String(r['最後に開いた'] || ''), first: String(r['初回'] || '') !== '' }));
@@ -113,7 +113,7 @@ function handle_(b) {
     const replies = readAll_(book.getSheetByName(SHEET.replies)).map(cleanR_);
     const notices = readAll_(book.getSheetByName(SHEET.notices)).map(cleanN_);
     const reads = readAll_(book.getSheetByName(SHEET.reads)).map(r => ({ noticeId: String(r.noticeId), uid: String(r.uid), at: String(r.at || '') }));
-    return { ok: true, feat: ['priv'], name: user.name, me: user.id, members, entries, replies, notices, reads, reports: reportsOf_(book), jumps: jumpsOf_(book),
+    return { ok: true, feat: ['priv'], schedule: schedule_(), name: user.name, me: user.id, members, entries, replies, notices, reads, reports: reportsOf_(book), jumps: jumpsOf_(book),
       coaches: readAll_(book.getSheetByName(SHEET.members)).filter(r => r['役割'] === 'coach' && r['名前']).map(r => ({ id: String(r.id), name: String(r['名前']) })),
       cnotes: readAll_(book.getSheetByName(SHEET.cnotes)).map(cleanC_), creads: readAll_(book.getSheetByName(SHEET.creads)).map(r => ({ noteId: String(r.noteId), uid: String(r.uid) })) };
   }
@@ -364,6 +364,40 @@ function touch_(book, user) {
       return;
     }
   } catch (e) {}
+}
+/* ===== 予定：Googleカレンダー「部活」を読んで、部員に見せてよいものだけ返す =====
+ * 出すもの：名前・日付・時刻・場所。説明欄（メモ）は出さない。
+ * 出さないもの：名前に「顧問」が入る予定・名前の頭に🔒・誕生日（🎂／誕生日）
+ * カレンダーは名前「部活」で探す（IDはここに書かない）。10分ごとに読み直す */
+const CAL_NAME = '部活';
+const SCHED_DAYS = 21;
+function schedule_() {
+  let cache = null; try { cache = CacheService.getScriptCache(); const hit = cache.get('pn_sched'); if (hit) return JSON.parse(hit); } catch (e) {}
+  let out = [];
+  try {
+    const cal = CalendarApp.getCalendarsByName(CAL_NAME)[0];
+    if (!cal) return [];
+    const now = new Date(); const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const to = new Date(from.getTime() + SCHED_DAYS * 86400000);
+    const f = d => Utilities.formatDate(d, 'Asia/Tokyo', 'yyyy-MM-dd'), hm = d => Utilities.formatDate(d, 'Asia/Tokyo', 'H:mm');
+    out = cal.getEvents(from, to).filter(ev => {
+      const t = String(ev.getTitle() || '').trim();
+      return t && t.indexOf('顧問') < 0 && t.indexOf('🔒') !== 0 && t.indexOf('🎂') < 0 && t.indexOf('誕生日') < 0;
+    }).map(ev => {
+      const all = ev.isAllDayEvent();
+      const st = all ? ev.getAllDayStartDate() : ev.getStartTime(), en = all ? ev.getAllDayEndDate() : ev.getEndTime();
+      return { title: String(ev.getTitle()).trim(), date: f(st), end: all ? f(new Date(en.getTime() - 86400000)) : f(en), allDay: all,
+        start: all ? '' : hm(st), endTime: all ? '' : hm(en), place: String(ev.getLocation() || '').trim() };
+    }).sort((a, b) => (a.date + (a.start || '00:00').padStart(5, '0')).localeCompare(b.date + (b.start || '00:00').padStart(5, '0')));
+  } catch (e) { return []; }
+  try { if (cache) cache.put('pn_sched', JSON.stringify(out), 600); } catch (e) {}
+  return out;
+}
+/** 最初に1回だけ（カレンダーを読む許可を出すため）エディタで実行。見つかった予定の数をログに出す */
+function checkSchedule() {
+  CacheService.getScriptCache().remove('pn_sched');
+  const cal = CalendarApp.getCalendarsByName(CAL_NAME)[0];
+  Logger.log(cal ? 'カレンダー「' + CAL_NAME + '」が見つかりました。部員に出す予定：' + schedule_().length + '件' : 'カレンダー「' + CAL_NAME + '」が見つかりません（共有がまだか、名前がちがいます）');
 }
 function readAll_(sh) {
   const v = sh.getDataRange().getValues(); const h = v[0];
