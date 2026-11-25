@@ -43,6 +43,7 @@ textarea:focus,input:focus{outline:2px solid var(--blue);border-color:var(--blue
 .date{font-weight:700;color:var(--navy);display:flex;justify-content:space-between;align-items:center;gap:8px}
 .tag{background:var(--yellow);font-size:10px;font-weight:800;padding:2px 7px;border-radius:9px;font-family:Arial;color:#000;white-space:nowrap}
 .tag.wait{background:var(--pale);color:var(--navy)}
+.tcount .tnum{display:flex;align-items:baseline;gap:4px;margin-bottom:6px}.tcount .tnum b{font-size:34px;font-family:Arial;color:var(--main);line-height:1}.tcount .tnum span{font-size:14px;color:var(--gray)}.tcount .trow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px}.tcount .trow .k{font-size:12px;font-weight:700;color:var(--gray);width:44px}.tname{border:1px solid var(--line2);background:#fff;border-radius:999px;padding:4px 10px;font:inherit;font-size:13px;color:var(--ink2);cursor:pointer}
 .tag.me{background:#E6E6E6!important;color:#444!important}.privnote{background:var(--soft);border-radius:12px;padding:10px 12px;font-size:12.5px;line-height:1.6;margin:14px 0 4px}.btn.ghost2{background:#fff;color:var(--main);border:2px solid var(--main);box-shadow:none;margin-top:10px}
 .nums{display:flex;gap:12px;font-size:12px;margin:6px 0;flex-wrap:wrap}.nums b{color:var(--navy);font-size:14px}
 .kv{font-size:13px;margin:4px 0;line-height:1.5}.kv .k{color:var(--gray);font-size:11px;display:block}
@@ -640,11 +641,26 @@ function renderCoach() {
   const list = cSort(S.showAll ? S.cd.entries : unreplied());
   const body = list.length ? list.map(e => entryHTML(e, { coach: true, open: true, who: memberName(e.uid), replies: cRepliesFor(e.id), tag: cRepliesFor(e.id).length ? '' : '<span class="tag">未返事</span>' })).join('')
     : `<p class="mini center" style="margin-top:40px">${S.showAll ? 'まだ記録がありません' : '返事を待っている記録はありません'}</p>`;
-  shell('顧問用　' + S.name, `<div class="mini" style="margin:2px 0 10px">体の調子・気持ち・出来などに1か2がある記録は、左に黄色の線が付きます</div>
+  shell('顧問用　' + S.name, `${todayBlock()}
+    <div class="h"><span class="en">NOTES</span><span class="ja">${S.showAll ? '記録' : '返事を待っている記録'}</span></div>
+    <div class="mini" style="margin:2px 0 10px">体の調子・気持ち・出来などに1か2がある記録は、左に黄色の線が付きます</div>
     <div class="list">${body}</div>
     <div class="foot"><button class="link" id="all">${S.showAll ? '返事を待っている記録だけ見る' : '返事済みも見る'}</button>　<button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);
   $('#all').onclick = () => { S.showAll = !S.showAll; render(); };
+  document.querySelectorAll('.tname').forEach(b => b.onclick = () => { S.tab = 'members'; S.member = b.dataset.uid; pushNav(); render(); window.scrollTo(0, 0); });
   bindCards(); bindReplies(); bindFoot();
+}
+/* 顧問の最初の画面：今日（記録の日付が今日）記録した部員の数と名前。「自分だけ」の記録も数える */
+function todayBlock() {
+  const mem = S.cd.members || []; const t = today();
+  const done = mem.filter(m => S.cd.entries.some(e => e.uid === m.id && e.date === t));
+  const yet = mem.filter(m => !done.includes(m));
+  const nm = (m, mark) => `<button class="tname" data-uid="${m.id}">${esc(m.name)}${mark ? '<span class="mini">（自分だけ）</span>' : ''}</button>`;
+  const onlyMe = m => { const es = S.cd.entries.filter(e => e.uid === m.id && e.date === t); return es.length && es.every(e => e.priv); };
+  return `<div class="h" style="margin-top:4px"><span class="en">TODAY</span><span class="ja">今日の記録　${jdate(t)}</span></div>
+    <div class="card tcount"><div class="tnum"><b>${done.length}</b><span>／${mem.length}人</span></div>
+    <div class="trow"><span class="k">書いた</span>${done.length ? done.map(m => nm(m, onlyMe(m))).join('') : '<span class="mini">まだいません</span>'}</div>
+    <div class="trow"><span class="k">まだ</span>${yet.length ? yet.map(m => nm(m)).join('') : '<span class="mini">全員書きました</span>'}</div></div>`;
 }
 function renderMembers() {
   const rows = S.cd.members.map(m => {
