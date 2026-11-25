@@ -45,6 +45,7 @@ textarea:focus,input:focus{outline:2px solid var(--blue);border-color:var(--blue
 .tag.wait{background:var(--pale);color:var(--navy)}
 .tcount .tnum{display:flex;align-items:baseline;gap:4px;margin-bottom:6px}.tcount .tnum b{font-size:34px;font-family:Arial;color:var(--main);line-height:1}.tcount .tnum span{font-size:14px;color:var(--gray)}.tcount .trow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px}.tcount .trow .k{font-size:12px;font-weight:700;color:var(--gray);width:44px}.tname{border:1px solid var(--line2);background:#fff;border-radius:999px;padding:4px 10px;font:inherit;font-size:13px;color:var(--ink2);cursor:pointer}
 .ev{display:flex;gap:10px;padding:5px 0;border-top:1px dashed var(--line2);font-size:14px;line-height:1.5}.ev:first-of-type{border-top:0}.evt{flex:0 0 92px;color:var(--gray);font-size:12.5px;padding-top:1px}.evn{flex:1;font-weight:700;color:var(--ink2)}.sday{margin-bottom:10px}.sday.stoday{border-left:6px solid var(--acc2)}.soon{width:100%;text-align:left;font:inherit;cursor:pointer;display:block;border:0}.soon .sdh{font-size:12px;font-weight:800;color:var(--main);margin-top:4px}
+mark.mg,mark.mb{color:inherit;padding:0 2px;border-radius:2px;font-weight:700}mark.mg{background:linear-gradient(transparent 45%,#FFE066 45%)}mark.mb{background:linear-gradient(transparent 45%,#FFB3C7 45%)}.mlegend{display:flex;gap:12px;justify-content:flex-end;font-size:12px;margin:6px 0 -4px}
 .tag.me{background:#E6E6E6!important;color:#444!important}.privnote{background:var(--soft);border-radius:12px;padding:10px 12px;font-size:12.5px;line-height:1.6;margin:14px 0 4px}.btn.ghost2{background:#fff;color:var(--main);border:2px solid var(--main);box-shadow:none;margin-top:10px}
 .nums{display:flex;gap:12px;font-size:12px;margin:6px 0;flex-wrap:wrap}.nums b{color:var(--navy);font-size:14px}
 .kv{font-size:13px;margin:4px 0;line-height:1.5}.kv .k{color:var(--gray);font-size:11px;display:block}
@@ -725,11 +726,16 @@ const pdiff = (a, b) => { if (a == null || b == null) return '—'; const v = Ma
 const sl = (k, v) => `<div class="sline"><b>${k}</b>${v}</div>`;
 function statsHTML(p, notes, prev) {
   const n = p.stats || {}, T = p.teamStats || {}; const few = (n.att || 0) < 5;
+  /* チーム全体より5ポイント以上よい／わるい率にマーカー */
+  const cls = (a, b) => (a == null || b == null) ? '' : Math.round(a * 100) - Math.round(b * 100) >= 5 ? 'mg' : Math.round(a * 100) - Math.round(b * 100) <= -5 ? 'mb' : '';
+  const M = (txt, c) => c ? `<mark class="${c}">${txt}</mark>` : txt;
+  const kr = few ? '' : cls(n.krate, T.krate), ke = few ? '' : cls(n.keff, T.keff), se = (n.sv || 0) < 5 ? '' : cls(n.seff, T.seff);
+  const ten = x => x == null ? '' : `（10本で約${Math.round(x * 10)}本）`;
   const vs = prev ? prev.stats || {} : null;
   const cmp = (lab, a, b, f) => sl(lab, `${f(a)}　<span class="mini">前回 ${f(b)}${a != null && b != null && f === pct ? `（${pdiff(a, b)}）` : ''}</span>`);
-  return `<div class="h"><span class="en">MATCH STATS</span><span class="ja">この試合の数字</span></div><div class="card">
-    ${sl('スパイク', `決定 ${n.kill}　ミス ${n.serr}`)}${sl('　（第2〜第5セット）', `打数 ${n.att}　決定率 ${pct(n.krate)}　効果率 ${pct(n.keff)}`)}
-    ${sl('サーブ', `本数 ${n.sv}　エース ${n.ace}　ミス ${n.sverr}　効果率 ${pct(n.seff)}`)}
+  return `${MK_LEGEND}<div class="h"><span class="en">MATCH STATS</span><span class="ja">この試合の数字</span></div><div class="card">
+    ${sl('スパイク', `決定 ${n.kill}　ミス ${n.serr}`)}${sl('　（第2〜第5セット）', `打数 ${n.att}　決定率 ${M(pct(n.krate), kr)}${ten(n.krate)}　効果率 ${M(pct(n.keff), ke)}`)}
+    ${sl('サーブ', `本数 ${n.sv}　エース ${n.ace}　ミス ${n.sverr}　効果率 ${M(pct(n.seff), se)}`)}
     ${sl('サーブレシーブ', `ミス ${n.recv}`)}${sl('レシーブ', `上げた ${n.dig}　ミス ${n.derr}`)}${sl('ブロック', `決定 ${n.blk}　タッチ ${n.bt}`)}
     ${sl('そのほかのミス', `カバー ${n.cov}　トス ${n.toss}　返球 ${n.ret}　その他 ${n.oth}`)}
     <div class="rnote" style="margin-top:6px">効果率＝（決定−ミス）÷打数、サーブは（エース−ミス）÷本数。${esc((notes || []).join(''))}</div></div>
@@ -739,20 +745,23 @@ function statsHTML(p, notes, prev) {
     ${sl('サーブ', `本数 ${share(n.sv, T.sv)}　エース ${share(n.ace, T.ace)}　ミス ${share(n.sverr, T.sverr)}`)}
     ${sl('サーブレシーブ', `ミス ${share(n.recv, T.recv)}`)}${sl('レシーブ', `上げた ${share(n.dig, T.dig)}　ミス ${share(n.derr, T.derr)}`)}
     <div class="subh">チーム全体との差（ポイント）</div>
-    ${sl('スパイク決定率', `${few ? '—（打数5本未満）' : pdiff(n.krate, T.krate)}（チーム ${pct(T.krate)}）`)}
-    ${sl('スパイク効果率', `${few ? '—（打数5本未満）' : pdiff(n.keff, T.keff)}（チーム ${pct(T.keff)}）`)}
-    ${sl('サーブ効果率', `${pdiff(n.seff, T.seff)}（チーム ${pct(T.seff)}）`)}
+    ${sl('スパイク決定率', `${few ? '—（打数5本未満）' : M(pdiff(n.krate, T.krate), kr)}（チーム ${pct(T.krate)}）`)}
+    ${sl('スパイク効果率', `${few ? '—（打数5本未満）' : M(pdiff(n.keff, T.keff), ke)}（チーム ${pct(T.keff)}）`)}
+    ${sl('サーブ効果率', `${M(pdiff(n.seff, T.seff), se)}（チーム ${pct(T.seff)}）`)}
     <div class="subh">前回との比較</div>
     ${vs ? `<div class="rnote">前回＝${esc(prev.match.title || '')}（${esc(prev.match.date || '')}）</div>` +
       cmp('スパイク決定率', few ? null : n.krate, (vs.att || 0) < 5 ? null : vs.krate, pct) + cmp('スパイク効果率', few ? null : n.keff, (vs.att || 0) < 5 ? null : vs.keff, pct) +
       cmp('サーブ効果率', n.seff, vs.seff, pct) + cmp('サーブレシーブのミス', n.recv, vs.recv, x => x == null ? '—' : x + '本') + cmp('レシーブで上げた', n.dig, vs.dig, x => x == null ? '—' : x + '本')
       : '<div class="rnote">この試合が1回目です。次の試合から並べます。</div>'}</div>`;
 }
+/* レポートの文中のマーカー：{+いい数字+}＝黄色、{-気をつけたい数字-}＝ピンク */
+const mk = t => esc(t).replace(/\{\+(.+?)\+\}/g, '<mark class="mg">$1</mark>').replace(/\{-(.+?)-\}/g, '<mark class="mb">$1</mark>');
+const MK_LEGEND = '<div class="mlegend"><mark class="mg">いい数字</mark><mark class="mb">気をつけたい数字</mark></div>';
 function blocksHTML(sections) {
   return (sections || []).map(sc => `<div class="h"><span class="en">${esc(sc.en)}</span><span class="ja">${esc(sc.ja)}</span></div><div class="card rep">` +
-    (sc.blocks || []).map(b => b.t === 'sub' ? `<h4>${esc(b.text)}</h4>` : b.t === 'note' ? `<p class="rnote">${esc(b.text)}</p>` :
+    (sc.blocks || []).map(b => b.t === 'sub' ? `<h4>${mk(b.text)}</h4>` : b.t === 'note' ? `<p class="rnote">${mk(b.text)}</p>` :
       b.t === 'fig' ? `<figure><img alt="図" src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(String(b.svg || ''))}">${b.cap ? `<figcaption>${esc(b.cap)}</figcaption>` : ''}</figure>` :
-      `<p>${esc(b.text)}</p>`).join('') + (sc.en === "COACH'S NOTE" ? '<p class="rnote" style="text-align:right">佐藤</p>' : '') + '</div>').join('');
+      `<p>${mk(b.text)}</p>`).join('') + (sc.en === "COACH'S NOTE" ? '<p class="rnote" style="text-align:right">佐藤</p>' : '') + '</div>').join('');
 }
 /* 1人分のレポート（prev＝同じ人の前の試合のレポート） */
 function playerReportHTML(r, prev, team) {
