@@ -1,7 +1,7 @@
 /**
  * PRACTICE NOTE（練習ノート）受け口
  * 1) setupPracticeNote を1回だけ実行 → 表「PRACTICE NOTE 記録」ができる
- * 2) 表の「部員」シートに名前を書く（先生はD列に coach・部員はF列に学年の数字 1／2／3）→ makeKeys を実行すると「はじめの合言葉」が入る（E列＝はじめ）
+ * 2) 表の「部員」シートに名前を書く（顧問はD列に coach・部員はF列に学年の数字 1／2／3）→ makeKeys を実行すると「はじめの合言葉」が入る（E列＝はじめ）
  *    はじめの合言葉で開くと、アプリが自分の合言葉を決めさせる。忘れた人は、A列を書き換えてE列に「はじめ」と書けば、もう一度決め直せる
  * 3) デプロイ → 新しいデプロイ → 種類「ウェブアプリ」・実行ユーザー「自分」・アクセス「全員」→ URLをアプリに貼る
  * 4) 自動更新：GitHub の main の gas/ が変わると、GitHub Actions が別のスクリプト「更新係」（gas-updater/）に合図し、
@@ -135,7 +135,7 @@ function handle_(b) {
       for (let i = 1; i < v.length; i++) {
         if (String(v[i][ci('id')]) !== String(b.replyId)) continue;
         const byId = String(v[i][ci('byId')] || ''), by = String(v[i][ci('by')] || '佐藤');
-        if (byId ? byId !== user.id : by !== user.name) return { ok: false, error: '書いた先生だけが直せます' };
+        if (byId ? byId !== user.id : by !== user.name) return { ok: false, error: '書いた顧問だけが直せます' };
         if (a === 'deleteReply') { sh.deleteRow(i + 1); return { ok: true }; }
         const text = String(b.text || '').trim();
         if (!text) return { ok: false, error: '返事が空です' };
@@ -147,7 +147,7 @@ function handle_(b) {
       return { ok: false, error: '返事が見つかりません' };
     });
   }
-  /* 自分だけに残した記録を、あとから先生に見せる */
+  /* 自分だけに残した記録を、あとから顧問に見せる */
   if (a === 'share' && !coach) {
     return withLock_(() => {
       const sh = book.getSheetByName(SHEET.entries); const v = sh.getDataRange().getValues(); const h = v[0];
@@ -204,7 +204,7 @@ function handle_(b) {
       const sh = book.getSheetByName(SHEET.notices); const v = sh.getDataRange().getValues(); const h = v[0]; const ci = name => h.indexOf(name);
       for (let i = 1; i < v.length; i++) {
         if (String(v[i][ci('id')]) !== String(b.noticeId)) continue;
-        if (String(v[i][ci('byId')]) !== user.id) return { ok: false, error: '書いた先生だけが直せます' };
+        if (String(v[i][ci('byId')]) !== user.id) return { ok: false, error: '書いた顧問だけが直せます' };
         if (a === 'deleteNotice') { sh.deleteRow(i + 1); return { ok: true }; }
         const text = String(b.text || '').trim(); if (!text) return { ok: false, error: 'お知らせが空です' };
         const now = new Date().toISOString();
@@ -277,7 +277,7 @@ function handle_(b) {
       const sh = book.getSheetByName(SHEET.cnotes); const v = sh.getDataRange().getValues(); const h = v[0]; const ci = name => h.indexOf(name);
       for (let i = 1; i < v.length; i++) {
         if (String(v[i][ci('id')]) !== String(b.noteId)) continue;
-        if (String(v[i][ci('byId')]) !== user.id) return { ok: false, error: '書いた先生だけが直せます' };
+        if (String(v[i][ci('byId')]) !== user.id) return { ok: false, error: '書いた顧問だけが直せます' };
         if (a === 'deleteCnote') { sh.deleteRow(i + 1); return { ok: true }; }
         const text = String(b.text || '').trim(); if (!text) return { ok: false, error: '空では保存できません' };
         const now = new Date().toISOString();

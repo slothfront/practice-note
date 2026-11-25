@@ -321,7 +321,7 @@ function renderLogin(err) {
   $('#go').onclick = async () => {
     const key = $('#pw').value.trim(); if (!key) return;
     $('#go').disabled = true;
-    try { const j = await api('login', { key }); S.key = key; S.name = j.name; S.role = j.role || 'student'; S.me = j.me || ''; store.set('me', S.me); store.set('key', key); store.set('name', j.name); store.set('role', S.role); if (j.needSet) { S.needSet = true; store.set('needSet', true); render(); return; } await refresh(); S.tab = S.role === 'coach' ? 'new' : 'today'; try { history.replaceState(navState(), ''); } catch (e) {} render(); if (S.role !== 'coach') { const n = unseen().length; if (n) toast(`先生からの返事が${n}件あります`); } }
+    try { const j = await api('login', { key }); S.key = key; S.name = j.name; S.role = j.role || 'student'; S.me = j.me || ''; store.set('me', S.me); store.set('key', key); store.set('name', j.name); store.set('role', S.role); if (j.needSet) { S.needSet = true; store.set('needSet', true); render(); return; } await refresh(); S.tab = S.role === 'coach' ? 'new' : 'today'; try { history.replaceState(navState(), ''); } catch (e) {} render(); if (S.role !== 'coach') { const n = unseen().length; if (n) toast(`顧問からの返事が${n}件あります`); } }
     catch (e) { renderLogin(e.server ? '合言葉がちがいます。もう一度確かめてください' : 'ネットにつながっていません。つながる所でもう一度'); }
   };
 }
@@ -379,7 +379,7 @@ function renderToday() {
   <div class="q">うまくいかなかったこと・その理由</div><textarea id="bad">${esc(d.bad)}</textarea>
   <div class="q">誰かに言われたこと・気づいたこと</div><textarea id="heard">${esc(d.heard)}</textarea>`;
   const nNew = unseenN();
-  const noticeBlock = nNew.length ? `<button class="notice fresh" id="toN" style="width:100%;text-align:left;font:inherit;cursor:pointer"><div class="date"><span>先生からのお知らせ　未読 <b>${nNew.length}件</b></span><span class="tag">未読</span></div><div class="mini">押すとお知らせのタブを開きます</div></button>` : '';
+  const noticeBlock = nNew.length ? `<button class="notice fresh" id="toN" style="width:100%;text-align:left;font:inherit;cursor:pointer"><div class="date"><span>顧問からのお知らせ　未読 <b>${nNew.length}件</b></span><span class="tag">未読</span></div><div class="mini">押すとお知らせのタブを開きます</div></button>` : '';
   shell(`${jdate(today())}　${S.name}`, `
   ${noticeBlock}
   ${lastMatchCard()}
@@ -399,8 +399,8 @@ function renderToday() {
   <textarea id="next" placeholder="次にやること">${esc(d.next)}</textarea>
   ${M ? `<div class="h"><span class="en">TO COACH</span><span class="ja">顧問に伝えたいこと</span></div><div class="hint">あれば</div>
   <textarea id="tocoach">${esc(d.tocoach)}</textarea>` : ''}
-  ${privOK() ? `<div class="privnote">「自分だけに残す」にすると、先生に届くのは<b>日付と数字</b>（意識できた・体の調子・気持ち${M ? '・出来' : ''}）だけです。書いた中身は記録の表には残りますが、先生のアプリには出ません。あとから「先生に見せる」にもできます。</div>` : ''}
-  <button class="btn" id="submit" ${S.viewAs ? 'disabled' : ''}>${S.viewAs ? '提出（見るだけの画面では押せません）' : privOK() ? '先生に見せる' : '提出'}</button>
+  ${privOK() ? `<div class="privnote">「自分だけに残す」にすると、顧問に届くのは<b>日付と数字</b>（意識できた・体の調子・気持ち${M ? '・出来' : ''}）だけです。書いた中身は記録の表には残りますが、顧問のアプリには出ません。あとから「顧問に見せる」にもできます。</div>` : ''}
+  <button class="btn" id="submit" ${S.viewAs ? 'disabled' : ''}>${S.viewAs ? '提出（見るだけの画面では押せません）' : privOK() ? '顧問に見せる' : '提出'}</button>
   ${privOK() ? `<button class="btn ghost2" id="submitMe" ${S.viewAs ? 'disabled' : ''}>自分だけに残す</button>` : ''}
   <p class="mini center">電波が無いときは、つながったときに自動で送ります</p>`);
   document.querySelectorAll('.dot').forEach(b => b.onclick = () => { saveDraft(); d[b.dataset.n] = Number(b.dataset.v); store.set('draft', d); renderToday(); });
@@ -430,7 +430,7 @@ async function submit(priv) {
   (M ? FM : F).forEach(([n]) => { if (!d[n]) miss.push(`.row[data-row=${n}]`); });
   if (!priv && M) MQ.forEach(([k]) => { if (!d[k].trim()) miss.push('#' + k); });
   if (!priv && !d.next.trim()) miss.push('#next');
-  if (priv && M && (d.tocoach || '').trim() && !miss.length && !confirm('「顧問に伝えたいこと」は、自分だけに残すと先生に届きません。このまま自分だけに残しますか？')) return;
+  if (priv && M && (d.tocoach || '').trim() && !miss.length && !confirm('「顧問に伝えたいこと」は、自分だけに残すと顧問に届きません。このまま自分だけに残しますか？')) return;
   if (d.date > today()) { toast('先の日付には書けません'); return; }
   if (miss.length) {
     miss.forEach(q => { const el = $(q); if (el) el.classList.add('miss'); });
@@ -445,7 +445,7 @@ async function submit(priv) {
   S.outbox.push(e); S.draft = null; store.del('draft'); save();
   $('#submit').disabled = true;
   await flush();
-  toast(S.outbox.some(x => x.id === e.id) ? '保存しました。ネットにつながったら送ります' : priv ? '自分だけに残しました（先生には日付と数字だけ届きます）' : '提出しました');
+  toast(S.outbox.some(x => x.id === e.id) ? '保存しました。ネットにつながったら送ります' : priv ? '自分だけに残しました（顧問には日付と数字だけ届きます）' : '提出しました');
   S.tab = 'history'; render(); window.scrollTo(0, 0);
 }
 
@@ -456,7 +456,7 @@ function replyHTML(r, coach) {
   return `<div class="coach"><span class="en">COACH</span>　${esc(r.by || '佐藤')}から${r.edited ? '<span class="mini">（直しました）</span>' : ''}\n${esc(r.text)}${coach && mineReply(r) ? `<div class="rbtns"><button class="mini-btn edit" data-rid="${r.id}">直す</button><button class="mini-btn del" data-rid="${r.id}">消す</button></div>` : ''}</div>`;
 }
 const isLow = e => fieldsOf(e).some(([n]) => e[n] && e[n] <= 2);
-/* 「自分だけに残す」は、受け口（GAS）が対応しているときだけ出す（古いGASだと中身が先生に見えてしまうため） */
+/* 「自分だけに残す」は、受け口（GAS）が対応しているときだけ出す（古いGASだと中身が顧問に見えてしまうため） */
 const privOK = () => (S.feat || []).includes('priv');
 const privTag = '<span class="tag me">自分だけ</span>';
 /* 顧問（と顧問が部員の画面で見るとき）に出す、自分だけの記録：日付と数字だけ */
@@ -486,7 +486,7 @@ function entryHTML(e, o) {
     <div class="more">${o.coach ? '' : reasons}${detail}${o.coach ? '' : toc}</div>
     <div class="kv"><span class="k">NEXT　次にどうする</span>${esc(e.next)}</div>
     ${rs.map(r => replyHTML(r, o.coach)).join('') || (e._wait || o.coach || e.priv ? '' : '<div class="mini" style="margin-top:6px">（返事はまだ）</div>')}
-    ${e.priv && !o.coach ? `<div class="rbtns" style="margin-top:8px"><span class="mini" style="flex:1">先生の画面には日付と数字だけ出ています</span><button class="mini-btn save shareb" data-share="${e.id}">先生に見せる</button></div>` : ''}
+    ${e.priv && !o.coach ? `<div class="rbtns" style="margin-top:8px"><span class="mini" style="flex:1">顧問の画面には日付と数字だけ出ています</span><button class="mini-btn save shareb" data-share="${e.id}">顧問に見せる</button></div>` : ''}
     ${o.coach ? `<div class="q">${rs.length ? 'もう一言' : `COACH　${esc(S.name)}から`}</div><textarea class="rep" id="rep_${e.id}" placeholder="一言">${esc(S.repDraft[e.id] || '')}</textarea><button class="btn send" data-id="${e.id}" style="margin-top:8px;padding:11px">返事を送る</button>` : ''}
     <button class="toggle">${o.open ? '閉じる' : '全部の中身を見る'}</button></div>`;
 }
@@ -520,11 +520,11 @@ function bindHistoryList() {
   bindCards();
   document.querySelectorAll('.shareb').forEach(b => b.onclick = async ev => {
     ev.stopPropagation(); if (S.viewAs) { toast('見るだけの画面です'); return; }
-    if (!confirm('この記録を先生に見せます。書いた中身も先生の画面に出ます。よいですか？')) return;
+    if (!confirm('この記録を顧問に見せます。書いた中身も顧問の画面に出ます。よいですか？')) return;
     const id = b.dataset.share; const w = S.outbox.find(x => x.id === id);
-    if (w) { w.priv = false; save(); refreshList(); toast('先生に見せる形で送ります'); return; }
+    if (w) { w.priv = false; save(); refreshList(); toast('顧問に見せる形で送ります'); return; }
     const e = S.entries.find(x => x.id === id); if (!e) return; b.disabled = true;
-    try { await api('share', { key: S.key, entryId: id }); e.priv = false; save(); refreshList(); toast('先生に見せました'); }
+    try { await api('share', { key: S.key, entryId: id }); e.priv = false; save(); refreshList(); toast('顧問に見せました'); }
     catch (err) { b.disabled = false; toast(err.server ? err.message : 'ネットにつながっていません。つながってからもう一度'); }
   });
   document.querySelectorAll('.starb').forEach(b => b.onclick = async ev => {
@@ -1016,8 +1016,8 @@ function bindCnotes(uid) {
 function renderBoard() {
   const list = cnotesOf('board');
   shell('顧問用　' + S.name, `<div class="h" style="margin-top:4px"><span class="en">COACHES</span><span class="ja">顧問の連絡ボード（部員には見えません）</span></div>
-    <div class="card"><div class="q" style="margin-top:0">書く場所</div><select id="cto"><option value="board" ${S.cTo === 'board' || !S.cTo ? 'selected' : ''}>連絡ボード（先生どうし）</option><optgroup label="部員ごとのメモ">${(S.cd.members || []).map(m => `<option value="${m.id}" ${S.cTo === m.id ? 'selected' : ''}>${esc(m.name)}のメモ</option>`).join('')}</optgroup></select>
-      <textarea id="cnew" style="margin-top:8px" placeholder="${!S.cTo || S.cTo === 'board' ? 'ほかの先生への連絡・共有したいこと' : 'けが・面談・気づいたことなど'}">${esc((S.cDraft || {})[S.cTo || 'board'] || '')}</textarea><button class="btn" id="csend" style="margin-top:8px;padding:11px">${!S.cTo || S.cTo === 'board' ? '送る' : 'メモを残す'}</button></div>
+    <div class="card"><div class="q" style="margin-top:0">書く場所</div><select id="cto"><option value="board" ${S.cTo === 'board' || !S.cTo ? 'selected' : ''}>連絡ボード（顧問どうし）</option><optgroup label="部員ごとのメモ">${(S.cd.members || []).map(m => `<option value="${m.id}" ${S.cTo === m.id ? 'selected' : ''}>${esc(m.name)}のメモ</option>`).join('')}</optgroup></select>
+      <textarea id="cnew" style="margin-top:8px" placeholder="${!S.cTo || S.cTo === 'board' ? 'ほかの顧問への連絡・共有したいこと' : 'けが・面談・気づいたことなど'}">${esc((S.cDraft || {})[S.cTo || 'board'] || '')}</textarea><button class="btn" id="csend" style="margin-top:8px;padding:11px">${!S.cTo || S.cTo === 'board' ? '送る' : 'メモを残す'}</button></div>
     <div class="list" style="margin-top:10px">${list.map(n => cnoteCard(n, true)).join('') || '<p class="mini center">まだ書き込みはありません</p>'}</div>
     <div class="h"><span class="en">MEMO</span><span class="ja">部員ごとのメモ（新しい順）</span></div>
     ${(() => { const ms = (S.cd.cnotes || []).filter(n => n.uid !== 'board').sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, 20);
@@ -1076,7 +1076,7 @@ window.addEventListener('pagehide', () => { try { history.replaceState(Object.as
 render();
 if (st0 && st0.y) requestAnimationFrame(() => window.scrollTo(0, st0.y));
 if (S.key && S.role === 'coach') refresh().then(ok => { if (ok) render(); });
-else if (S.key) refresh().then(ok => { if (!ok) return; const n = unseen().length, m = unseenN().length; if (S.tab !== 'today' || m) render(); if (n) toast(`先生からの返事が${n}件あります`); });
+else if (S.key) refresh().then(ok => { if (!ok) return; const n = unseen().length, m = unseenN().length; if (S.tab !== 'today' || m) render(); if (n) toast(`顧問からの返事が${n}件あります`); });
 </script>
 <script>
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
