@@ -367,7 +367,8 @@ function touch_(book, user) {
 }
 /* ===== 予定：Googleカレンダー「部活」を読んで、部員に見せてよいものだけ返す =====
  * 出すもの：名前・日付・時刻・場所。説明欄（メモ）は出さない。
- * 出さないもの：名前に「顧問」が入る予定・名前の頭に🔒・誕生日（🎂／誕生日）
+ * 出さないもの：名前に「顧問」が入る予定・名前の頭に🔒
+ * 誕生日（🎂／誕生日）は出すが、名前の（ ）の中（フルネーム）は消す
  * カレンダーは名前「部活」で探す（IDはここに書かない）。10分ごとに読み直す */
 const CAL_NAME = '部活';
 const SCHED_DAYS = 21;
@@ -382,11 +383,13 @@ function schedule_() {
     const f = d => Utilities.formatDate(d, 'Asia/Tokyo', 'yyyy-MM-dd'), hm = d => Utilities.formatDate(d, 'Asia/Tokyo', 'H:mm');
     out = cal.getEvents(from, to).filter(ev => {
       const t = String(ev.getTitle() || '').trim();
-      return t && t.indexOf('顧問') < 0 && t.indexOf('🔒') !== 0 && t.indexOf('🎂') < 0 && t.indexOf('誕生日') < 0;
+      return t && t.indexOf('顧問') < 0 && t.indexOf('🔒') !== 0;
     }).map(ev => {
+      let title = String(ev.getTitle()).trim();
+      if (title.indexOf('🎂') >= 0 || title.indexOf('誕生日') >= 0) title = title.replace(/[（(][^）)]*[）)]/g, '').trim();
       const all = ev.isAllDayEvent();
       const st = all ? ev.getAllDayStartDate() : ev.getStartTime(), en = all ? ev.getAllDayEndDate() : ev.getEndTime();
-      return { title: String(ev.getTitle()).trim(), date: f(st), end: all ? f(new Date(en.getTime() - 86400000)) : f(en), allDay: all,
+      return { title, date: f(st), end: all ? f(new Date(en.getTime() - 86400000)) : f(en), allDay: all,
         start: all ? '' : hm(st), endTime: all ? '' : hm(en), place: String(ev.getLocation() || '').trim() };
     }).sort((a, b) => (a.date + (a.start || '00:00').padStart(5, '0')).localeCompare(b.date + (b.start || '00:00').padStart(5, '0')));
   } catch (e) { return []; }
