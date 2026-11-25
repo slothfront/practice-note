@@ -1086,7 +1086,8 @@ function renderBoard() {
 /* ===== 予定（顧問のGoogleカレンダー「部活」から。説明欄は来ない） ===== */
 const addDays = (ymd, n) => { const [y, m, d] = ymd.split('-').map(Number); const x = new Date(y, m - 1, d + n); return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`; };
 const schedOn = ymd => (S.sched || []).filter(e => e.date <= ymd && ymd <= (e.end || e.date));
-const evHTML = e => `<div class="ev"><span class="evt">${e.allDay ? '終日' : esc(e.start) + (e.endTime ? '〜' + esc(e.endTime) : '')}</span><span class="evn">${esc(e.title)}${e.place ? `<span class="mini">　${esc(e.place)}</span>` : ''}</span></div>`;
+/* 時刻の無い予定（カレンダーの「終日」）は時刻を出さない（実際の練習は終日ではないため） */
+const evHTML = e => `<div class="ev">${e.allDay ? '' : `<span class="evt">${esc(e.start) + (e.endTime ? '〜' + esc(e.endTime) : '')}</span>`}<span class="evn">${esc(e.title)}${e.place ? `<span class="mini">　${esc(e.place)}</span>` : ''}</span></div>`;
 function schedSoon() {
   const t = today(), tm = addDays(t, 1); const a = schedOn(t), b = schedOn(tm);
   if (!a.length && !b.length) return '';
