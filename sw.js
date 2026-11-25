@@ -52,6 +52,9 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
+  // 新しい版の確かめ（index.html の ?v=…）は控えを使わず、いつもネットに聞く
+  if (url.origin === location.origin && url.searchParams.has('v')) return;
+
   if (url.origin === location.origin) {
     e.respondWith(caches.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req)));
     return;

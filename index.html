@@ -46,6 +46,7 @@ textarea:focus,input:focus{outline:2px solid var(--blue);border-color:var(--blue
 .tcount .tnum{display:flex;align-items:baseline;gap:4px;margin-bottom:6px}.tcount .tnum b{font-size:34px;font-family:Arial;color:var(--main);line-height:1}.tcount .tnum span{font-size:14px;color:var(--gray)}.tcount .trow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px}.tcount .trow .k{font-size:12px;font-weight:700;color:var(--gray);width:44px}.tname{border:1px solid var(--line2);background:#fff;border-radius:999px;padding:4px 10px;font:inherit;font-size:13px;color:var(--ink2);cursor:pointer}
 .ev{display:flex;gap:10px;padding:5px 0;border-top:1px dashed var(--line2);font-size:14px;line-height:1.5}.ev:first-of-type{border-top:0}.evt{flex:0 0 92px;color:var(--gray);font-size:12.5px;padding-top:1px}.evn{flex:1;font-weight:700;color:var(--ink2)}.sday{margin-bottom:10px}.sday.stoday{border-left:6px solid var(--acc2)}.soon{width:100%;text-align:left;font:inherit;cursor:pointer;display:block;border:0}.soon .sdh{font-size:12px;font-weight:800;color:var(--main);margin-top:4px}
 mark.mg,mark.mb{color:inherit;padding:0 2px;border-radius:2px;font-weight:700}mark.mg{background:linear-gradient(transparent 45%,#FFE066 45%)}mark.mb{background:linear-gradient(transparent 45%,#FFB3C7 45%)}.mlegend{display:flex;gap:12px;justify-content:flex-end;font-size:12px;margin:6px 0 -4px}
+.updbar{position:fixed;left:12px;right:12px;bottom:14px;z-index:50;border:0;border-radius:14px;padding:14px;font:inherit;font-weight:800;font-size:15px;background:#FFE066;color:#1a1a1a;box-shadow:0 4px 14px rgba(0,0,0,.18);cursor:pointer}
 .tag.me{background:#E6E6E6!important;color:#444!important}.privnote{background:var(--soft);border-radius:12px;padding:10px 12px;font-size:12.5px;line-height:1.6;margin:14px 0 4px}.btn.ghost2{background:#fff;color:var(--main);border:2px solid var(--main);box-shadow:none;margin-top:10px}
 .nums{display:flex;gap:12px;font-size:12px;margin:6px 0;flex-wrap:wrap}.nums b{color:var(--navy);font-size:14px}
 .kv{font-size:13px;margin:4px 0;line-height:1.5}.kv .k{color:var(--gray);font-size:11px;display:block}
@@ -1133,6 +1134,32 @@ else if (S.key) refresh().then(ok => { if (!ok) return; const n = unseen().lengt
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
 }
+/* ===== 新しい版を見つけて入れ替える =====
+ * 公開中のページを取り寄せ、いま動いている本体のコードがそのまま含まれていなければ新しい版。
+ * 開いた直後（まだ触っていない）なら自動で読み込み直す。触ったあとなら「新しい版があります」を出す。
+ * 電波が無くても開ける仕組み（sw.js）の控えも新しい版に差しかえておく */
+(function () {
+  const self = (document.querySelector('script:not([src])') || {}).textContent || '';
+  const born = Date.now(); let touched = false, last = 0, shown = false;
+  ['pointerdown', 'keydown', 'input'].forEach(t => window.addEventListener(t, () => { touched = true; }, { capture: true }));
+  async function check() {
+    if (!self || shown || !navigator.onLine || Date.now() - last < 60000) return; last = Date.now();
+    try {
+      const res = await fetch('./?v=' + Date.now(), { cache: 'no-store' }); if (!res.ok) return;
+      const txt = await res.text(); if (txt.indexOf('PRACTICE NOTE') < 0 || txt.indexOf(self) >= 0) return;
+      try { const c = await caches.open('pnote-v1'); await c.put('./', new Response(txt, { headers: { 'Content-Type': 'text/html; charset=utf-8' } })); } catch (e) {}
+      let prev = 0; try { prev = Number(sessionStorage.getItem('pn_upd') || 0); } catch (e) {}
+      if (!touched && Date.now() - born < 10000 && Date.now() - prev > 60000) {
+        try { sessionStorage.setItem('pn_upd', String(Date.now())); } catch (e) {}
+        location.reload(); return;
+      }
+      shown = true; const b = document.createElement('button'); b.className = 'updbar'; b.textContent = '新しい版があります（押すと更新）';
+      b.onclick = () => location.reload(); document.body.appendChild(b);
+    } catch (e) {}
+  }
+  window.addEventListener('load', () => setTimeout(check, 800));
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+})();
 </script>
 </body>
 </html>
