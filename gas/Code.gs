@@ -4,6 +4,11 @@
  * 2) 表の「部員」シートに名前を書く（顧問はD列に coach・部員はF列に学年の数字 1／2／3）→ makeKeys を実行すると「はじめの合言葉」が入る（E列＝はじめ）
  *    はじめの合言葉で開くと、アプリが自分の合言葉を決めさせる。忘れた人は、A列を書き換えてE列に「はじめ」と書けば、もう一度決め直せる
  * 3) デプロイ → 新しいデプロイ → 種類「ウェブアプリ」・実行ユーザー「自分」・アクセス「全員」→ URLをアプリに貼る
+ * 5) バックアップ：アプリが使われたとき、前のバックアップから7日たっていれば表の写しを作る（マイドライブ直下に
+ *    「PRACTICE NOTE 記録_バックアップ_YYYYMMDD」。Drive整理が 03_部活/練習/PRACTICE NOTE バックアップ へ移す）。手で＝backupNow
+ * 6) 代の切り替え：引退する学年が決まったら retireGrade3（または retireGrade2）を実行。部員シートの「役割」が「引退」になり、
+ *    顧問の画面・人数・お知らせの宛先から外れる（本人は自分の記録を見られる）。ジャンプは「○○のベスト」として参考線に残る。
+ *    4月に学年を1つ上げる＝nextSchoolYear。どれも先にバックアップを取る
  * 4) 自動更新：GitHub の main の gas/ が変わると、GitHub Actions が別のスクリプト「更新係」（gas-updater/）に合図し、
  *    更新係がこのスクリプトの中身を入れ替えて、新しいバージョンでデプロイし直す（このスクリプト自身は何もしない）
  */
@@ -74,7 +79,7 @@ function handle_(b) {
   if (!user) return { ok: false, error: '合言葉がちがいます' };
   const coach = user.role === 'coach';
   const a = b.action;
-  if (a === 'login' || a === 'list' || a === 'coachList') touch_(book, user);
+  if (a === 'login' || a === 'list' || a === 'coachList') { touch_(book, user); weeklyBackup_(book); }
   if (a === 'login') return { ok: true, name: user.name, me: user.id, role: coach ? 'coach' : 'student', needSet: user.first };
   if (a === 'setKey') {
     const nk = String(b.newKey || '').trim();
@@ -108,12 +113,14 @@ function handle_(b) {
     return { ok: true, name: user.name, entries, replies, notices, readN, reports, jumps: jumpsOf_(book), feat: ['priv'], schedule: schedule_() };
   }
   if (a === 'coachList' && coach) {
-    const members = readAll_(book.getSheetByName(SHEET.members)).filter(r => r['役割'] !== 'coach' && r['名前']).map(r => ({ id: String(r.id), name: String(r['名前']), grade: gradeOf_(r['学年']), last: String(r['最後に開いた'] || ''), first: String(r['初回'] || '') !== '' }));
-    const entries = readAll_(book.getSheetByName(SHEET.entries)).map(r => hidePriv_(Object.assign(clean_(r), { uid: String(r.uid) })));
+    const allMem = readAll_(book.getSheetByName(SHEET.members));
+    const gone = new Set(allMem.filter(isRetired_).map(r => String(r.id)));
+    const members = allMem.filter(r => r['役割'] !== 'coach' && !isRetired_(r) && r['名前']).map(r => ({ id: String(r.id), name: String(r['名前']), grade: gradeOf_(r['学年']), last: String(r['最後に開いた'] || ''), first: String(r['初回'] || '') !== '' }));
+    const entries = readAll_(book.getSheetByName(SHEET.entries)).filter(r => !gone.has(String(r.uid))).map(r => hidePriv_(Object.assign(clean_(r), { uid: String(r.uid) })));
     const replies = readAll_(book.getSheetByName(SHEET.replies)).map(cleanR_);
     const notices = readAll_(book.getSheetByName(SHEET.notices)).map(cleanN_);
     const reads = readAll_(book.getSheetByName(SHEET.reads)).map(r => ({ noticeId: String(r.noticeId), uid: String(r.uid), at: String(r.at || '') }));
-    return { ok: true, feat: ['priv'], schedule: schedule_(), name: user.name, me: user.id, members, entries, replies, notices, reads, reports: reportsOf_(book), jumps: jumpsOf_(book),
+    return { ok: true, feat: ['priv'], schedule: schedule_(), name: user.name, me: user.id, members, entries, replies, notices, reads, reports: reportsOf_(book).filter(r => !gone.has(r.uid)), jumps: jumpsOf_(book),
       coaches: readAll_(book.getSheetByName(SHEET.members)).filter(r => r['役割'] === 'coach' && r['名前']).map(r => ({ id: String(r.id), name: String(r['名前']) })),
       cnotes: readAll_(book.getSheetByName(SHEET.cnotes)).map(cleanC_), creads: readAll_(book.getSheetByName(SHEET.creads)).map(r => ({ noteId: String(r.noteId), uid: String(r.uid) })) };
   }
@@ -187,7 +194,7 @@ function handle_(b) {
   if (a === 'notice' && coach) {
     const text = String(b.text || '').trim(); const to = String(b.to || '');
     if (!text) return { ok: false, error: 'お知らせが空です' };
-    const studs = readAll_(book.getSheetByName(SHEET.members)).filter(m => m['役割'] !== 'coach' && m['名前']);
+    const studs = readAll_(book.getSheetByName(SHEET.members)).filter(m => m['役割'] !== 'coach' && !isRetired_(m) && m['名前']);
     let targets = '';
     if (/^grade:\d$/.test(to)) {
       const g = to.slice(6); const ids = studs.filter(m => gradeOf_(m['学年']) === g).map(m => String(m.id));
@@ -311,11 +318,18 @@ function reportsOf_(book) {
 }
 /* ---- ジャンプ測定（1行＝測定日×部員。名前は部員シートから付ける） ---- */
 function jumpsOf_(book) {
-  const names = {}; readAll_(book.getSheetByName(SHEET.members)).forEach(m => { names[String(m.id)] = String(m['名前'] || ''); });
+  const names = {}, gone = {}; readAll_(book.getSheetByName(SHEET.members)).forEach(m => { names[String(m.id)] = String(m['名前'] || ''); if (isRetired_(m)) gone[String(m.id)] = true; });
   const nm = u => /^ref:/.test(u) ? u.slice(4) : names[u];
-  return readAll_(book.getSheetByName(SHEET.jumps)).filter(r => nm(String(r.uid))).map(r => ({
-    id: String(r.id), uid: String(r.uid), name: nm(String(r.uid)), date: String(r.date), stand: String(r.stand || ''), run: String(r.run || ''), reach: String(r.reach || '')
+  const rows = readAll_(book.getSheetByName(SHEET.jumps)).filter(r => nm(String(r.uid))).map(r => ({
+    id: String(r.id), uid: String(r.uid), name: nm(String(r.uid)), date: dstr_(r.date), stand: String(r.stand || ''), run: String(r.run || ''), reach: String(r.reach || '')
   }));
+  /* 引退した部員は、測定の一覧から外して「○○のベスト」（参考線）1行にまとめる */
+  const best = {}; const top = v => Math.max.apply(null, String(v || '').split(/[\s,、　]+/).map(Number).filter(x => x > 0).concat([0]));
+  rows.filter(r => gone[r.uid]).sort((a, b) => a.date.localeCompare(b.date)).forEach(r => {
+    const b = best[r.uid] = best[r.uid] || { id: 'x' + r.uid, uid: 'ref:' + r.name, name: r.name, date: 'ref', stand: 0, run: 0, reach: '' };
+    b.stand = Math.max(b.stand, top(r.stand)); b.run = Math.max(b.run, top(r.run)); if (top(r.reach)) b.reach = String(top(r.reach));
+  });
+  return rows.filter(r => !gone[r.uid]).concat(Object.keys(best).map(k => Object.assign(best[k], { stand: best[k].stand ? String(best[k].stand) : '', run: best[k].run ? String(best[k].run) : '' })));
 }
 function deleteReportRows_(book, mid) {
   const sh = book.getSheetByName(SHEET.reports); const v = sh.getDataRange().getValues(); const ci = v[0].indexOf('matchId');
@@ -426,8 +440,63 @@ function cleanN_(n) { return { id: String(n.id), to: String(n.to), targets: Stri
 /** 学年の欄から数字だけ取り出す（「2」「2年」どちらでも） */
 function gradeOf_(v) { const m = String(v == null ? '' : v).normalize('NFKC').match(/[1-3]/); return m ? m[0] : ''; }
 /** そのお知らせがこの部員あてか（学年あては、送ったときの部員の一覧で決める） */
-function forUser_(n, user) { const to = String(n.to); if (to === 'all' || to === user.id) return true; return /^grade:/.test(to) && String(n.targets || '').split(',').indexOf(user.id) !== -1; }
+const RETIRED = '引退';
+const isRetired_ = r => String(r['役割'] || '').trim() === RETIRED;
+function forUser_(n, user) { const to = String(n.to); if (to === user.id) return true; if (user.role === RETIRED) return false; if (to === 'all') return true; return /^grade:/.test(to) && String(n.targets || '').split(',').indexOf(user.id) !== -1; }
 function clip_(s) { s = String(s); if (/^[=+@]/.test(s)) s = "'" + s; return s.slice(0, 4000); }
 function withLock_(fn) { const l = LockService.getScriptLock(); l.waitLock(15000); try { return fn(); } finally { l.releaseLock(); } }
 function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
 
+/* ===== バックアップ（表の写し） ===== */
+const BACKUP_PROP = 'PN_LAST_BACKUP';
+/** 前のバックアップから7日たっていたら写しを作る（アプリが使われたときに呼ばれる。同時に2つ作らない） */
+function weeklyBackup_(book) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const last = Number(props.getProperty(BACKUP_PROP) || 0);
+    if (Date.now() - last < 7 * 86400000) return;
+    const l = LockService.getScriptLock(); if (!l.tryLock(0)) return;
+    try {
+      if (Date.now() - Number(props.getProperty(BACKUP_PROP) || 0) < 7 * 86400000) return;
+      backup_(book, '');
+      props.setProperty(BACKUP_PROP, String(Date.now()));
+    } finally { l.releaseLock(); }
+  } catch (e) {}
+}
+function backup_(book, tag) {
+  const name = 'PRACTICE NOTE 記録_バックアップ_' + (tag ? tag + '_' : '') + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd_HHmm');
+  const copy = book.copy(name);
+  return { name, url: copy.getUrl() };
+}
+/** 手でバックアップを取る（エディタで実行） */
+function backupNow() { const r = backup_(book_(), '手動'); Logger.log('作りました：' + r.name + '\n' + r.url); }
+
+/* ===== 代の切り替え（エディタで実行。どれも先にバックアップを取る） ===== */
+/** 3年生を引退にする */
+function retireGrade3() { retireGrade_('3'); }
+/** 2年生を引退にする（3年生がいない年に2年生が引退するとき） */
+function retireGrade2() { retireGrade_('2'); }
+function retireGrade_(g) {
+  const book = book_(); backup_(book, g + '年引退前');
+  const sh = book.getSheetByName(SHEET.members); const v = sh.getDataRange().getValues(); const h = v[0];
+  const ri = h.indexOf('役割'), gi = h.indexOf('学年'), ni = h.indexOf('名前'); const done = [];
+  for (let i = 1; i < v.length; i++) {
+    if (!v[i][ni] || String(v[i][ri]) === 'coach' || String(v[i][ri]).trim() === RETIRED) continue;
+    if (gradeOf_(v[i][gi]) !== g) continue;
+    sh.getRange(i + 1, ri + 1).setValue(RETIRED); done.push(String(v[i][ni]));
+  }
+  try { CacheService.getScriptCache().remove('pn_sched'); } catch (e) {}
+  Logger.log(done.length ? g + '年生を引退にしました：' + done.join('・') + '（もどすときは「役割」を student に）' : g + '年生の部員が見つかりませんでした');
+}
+/** 4月：引退していない部員の学年を1つ上げる */
+function nextSchoolYear() {
+  const book = book_(); backup_(book, '学年を上げる前');
+  const sh = book.getSheetByName(SHEET.members); const v = sh.getDataRange().getValues(); const h = v[0];
+  const ri = h.indexOf('役割'), gi = h.indexOf('学年'), ni = h.indexOf('名前'); const done = [];
+  for (let i = 1; i < v.length; i++) {
+    if (!v[i][ni] || String(v[i][ri]) === 'coach' || String(v[i][ri]).trim() === RETIRED) continue;
+    const g = Number(gradeOf_(v[i][gi])); if (!g) continue;
+    sh.getRange(i + 1, gi + 1).setValue(String(g + 1)); done.push(String(v[i][ni]) + ' ' + g + '→' + (g + 1));
+  }
+  Logger.log('学年を上げました：' + done.join('、'));
+}

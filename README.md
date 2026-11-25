@@ -60,6 +60,13 @@ Apps Script API を使うのは更新係だけで、自分の Google Cloud プ�
 - 本体の使う許可（`gas/appsscript.json` の `oauthScopes`）を増やすときは、自動では許可されないので、本体のエディタで1回実行して許可する
 - 前提：[Apps Scriptの設定](https://script.google.com/home/usersettings)で「Google Apps Script API」がオン。バージョンは1つのスクリプトで200まで
 
+### バックアップと代の切り替え
+
+- **バックアップ**：アプリが使われたとき、前から7日たっていれば表の写し「PRACTICE NOTE 記録_バックアップ_YYYYMMDD_HHMM」を作る（マイドライブ直下にでき、Drive整理が `03_部活/練習/PRACTICE NOTE バックアップ` へ移す）。手で＝GASのエディタで `backupNow`
+- **代の切り替え**：引退する学年が決まったら、GASのエディタで `retireGrade3`（3年生がいない年は `retireGrade2`）を実行。部員シートの「役割」が「引退」になり、顧問の画面・人数・お知らせの宛先から外れる。本人は自分の記録を見られる。ジャンプは「○○のベスト」として参考線に残る。もどすときは「役割」を `student` に
+- **4月**：`nextSchoolYear` で、引退していない部員の学年を1つ上げる。新入部員は「部員」シートに1行足して `makeKeys`
+- どれも先にバックアップを取る
+
 ### GASを入れ直すとき
 
 1. `gas/Code.gs` をスクリプトに貼る（はじめてのときだけ `setupPracticeNote` を1回実行して表を作る）
