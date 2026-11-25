@@ -48,6 +48,7 @@ textarea:focus,input:focus{outline:2px solid var(--blue);border-color:var(--blue
 mark.mg,mark.mb{color:inherit;padding:0 2px;border-radius:2px;font-weight:700}mark.mg{background:linear-gradient(transparent 45%,#FFE066 45%)}mark.mb{background:linear-gradient(transparent 45%,#FFB3C7 45%)}.mlegend{display:flex;gap:12px;justify-content:flex-end;font-size:12px;margin:6px 0 -4px}
 .updbar{position:fixed;left:12px;right:12px;bottom:14px;z-index:50;border:0;border-radius:14px;padding:14px;font:inherit;font-weight:800;font-size:15px;background:#FFE066;color:#1a1a1a;box-shadow:0 4px 14px rgba(0,0,0,.18);cursor:pointer}
 .dseg{margin:2px 0 6px}
+.stash{display:flex;align-items:center;gap:10px;justify-content:space-between;border-left:6px solid var(--acc2);margin-bottom:12px}.stash .rbtns{margin:0;flex:0 0 auto}
 .tag.me{background:#E6E6E6!important;color:#444!important}.privnote{background:var(--soft);border-radius:12px;padding:10px 12px;font-size:12.5px;line-height:1.6;margin:14px 0 4px}.btn.ghost2{background:#fff;color:var(--main);border:2px solid var(--main);box-shadow:none;margin-top:10px}
 .nums{display:flex;gap:12px;font-size:12px;margin:6px 0;flex-wrap:wrap}.nums b{color:var(--navy);font-size:14px}
 .kv{font-size:13px;margin:4px 0;line-height:1.5}.kv .k{color:var(--gray);font-size:11px;display:block}
@@ -228,7 +229,7 @@ async function demoApi(action, b) {
 /* ===== 状態 ===== */
 const S = {
   key: store.get('key', ''), name: store.get('name', ''), role: store.get('role', 'student'), needSet: store.get('needSet', false), me: store.get('me', ''), editing: null, editingN: null, notices: store.get('notices', []), seenN: store.get('seenN', []), reportedN: store.get('reportedN', []),
-  cd: store.get('cd', { members: [], entries: [], replies: [] }), reports: store.get('reports', []), jumps: store.get('jumps', []), readN: store.get('readN', []), feat: store.get('feat', []), sched: store.get('sched', []), seenRep: store.get('seenRep', []), imp: null, member: null, showAll: false, repDraft: {},
+  cd: store.get('cd', { members: [], entries: [], replies: [] }), reports: store.get('reports', []), jumps: store.get('jumps', []), readN: store.get('readN', []), feat: store.get('feat', []), stash: store.get('stash', []), sched: store.get('sched', []), seenRep: store.get('seenRep', []), imp: null, member: null, showAll: false, repDraft: {},
   entries: store.get('entries', []), replies: store.get('replies', []),
   outbox: store.get('outbox', []), seen: store.get('seen', []),
   tab: 'today', draft: store.get('draft', null), justSeen: [], hmode: store.get('hmode', 'all'), hq: '', starOnly: false
@@ -273,7 +274,7 @@ async function flush() {
     catch (err) { if (err.server) { /* 受け口が断った */ } break; }
   }
 }
-const clearLocal = () => ['key', 'name', 'role', 'needSet', 'me', 'entries', 'replies', 'outbox', 'seen', 'draft', 'cd', 'notices', 'seenN', 'reportedN', 'reports', 'seenRep', 'jumps', 'readN'].forEach(k => store.del(k));
+const clearLocal = () => ['key', 'name', 'role', 'needSet', 'me', 'entries', 'replies', 'outbox', 'seen', 'draft', 'cd', 'notices', 'seenN', 'reportedN', 'reports', 'seenRep', 'jumps', 'readN', 'stash', 'sched', 'feat', 'cdLast'].forEach(k => store.del(k));
 function forgetIfBadKey(e) {
   if (e && e.server && /先に自分の合言葉/.test(e.message || '')) { S.needSet = true; store.set('needSet', true); render(); return; }
   if (e && e.server && /合言葉/.test(e.message || '')) { clearLocal(); location.reload(); }
@@ -363,7 +364,10 @@ const MQ = [['mgood', 'よかったプレー・できるようになったこと
   ['tgood', 'チームのよかったところ', ''], ['tbad', 'チームに足りなかったところ', ''],
   ['mprac', '練習で取り組みたいこと', '']];
 const TEXT_KEYS = ['focus', 'good', 'bad', 'heard', 'next', 'r1', 'r2', 'r3', 'r4', 'opp', 'mgood', 'mbad', 'tgood', 'tbad', 'mprac', 'tocoach'];
-function blankDraft(date) { const d = { date: date || today(), type: 'practice', n1: 0, n2: 0, n3: 0, n4: 0 }; TEXT_KEYS.forEach(k => { if (!(k in d)) d[k] = ''; }); d.focus = lastNext(d.date); if (date) d.pick = true; return d; }
+/* 書きかけ（まだ提出していない記録）に、本人が書いたものがあるか */
+const draftHas = d => !!d && (['n1', 'n2', 'n3', 'n4'].some(k => d[k]) || TEXT_KEYS.some(k => k !== 'focus' && String(d[k] || '').trim()) || (String(d.focus || '').trim() && d.focus !== (d.pre != null ? d.pre : lastNext(d.date))));
+function stashDraft(d) { S.stash = [...(S.stash || []).filter(x => x.date !== d.date), d].sort((a, b) => a.date.localeCompare(b.date)).slice(-5); store.set('stash', S.stash); }
+function blankDraft(date) { const d = { date: date || today(), type: 'practice', n1: 0, n2: 0, n3: 0, n4: 0 }; TEXT_KEYS.forEach(k => { if (!(k in d)) d[k] = ''; }); d.focus = lastNext(d.date); d.pre = d.focus; if (date) d.pick = true; return d; }
 function saveDraft() {
   if (S.tab !== 'today' || !$('#focus')) return;
   const d = S.draft || blankDraft();
@@ -372,6 +376,8 @@ function saveDraft() {
 }
 function renderToday() {
   /* 日付を選んで書いている下書き（pick）は日をまたいでも残す。そうでなければ毎日新しく */
+  /* 日付が変わっても、書きかけは捨てずに「書きかけ」にとっておく */
+  if (S.draft && !S.draft.pick && S.draft.date < today() && draftHas(S.draft)) { stashDraft(S.draft); S.draft = null; }
   if (!S.draft || (!S.draft.pick && S.draft.date !== today()) || S.draft.date > today()) S.draft = blankDraft();
   const d = S.draft; TEXT_KEYS.forEach(k => { if (d[k] == null) d[k] = ''; }); if (!d.type) d.type = 'practice';
   const M = d.type === 'match';
@@ -393,6 +399,7 @@ function renderToday() {
   ${schedSoon()}
   ${lastMatchCard()}
   ${S.outbox.length ? `<div class="pending">送信待ち ${S.outbox.length}件。ネットにつながったら自動で送ります</div>` : ''}
+  ${(S.stash || []).map((x, i) => `<div class="card stash"><div><b>${jdate(x.date)}の書きかけがあります</b><div class="mini">まだ提出していません${x.focus && x.focus !== x.pre ? `　FOCUS：${esc(String(x.focus).slice(0, 24))}` : ''}</div></div><div class="rbtns"><button class="mini-btn save" data-stgo="${i}">続きを書く</button><button class="mini-btn cancel" data-stdel="${i}">捨てる</button></div></div>`).join('')}
   <div class="h" style="margin-top:4px"><span class="en">DATE</span><span class="ja">記録する日</span></div><div class="hint">書き忘れた日は、日付を変えるとあとから書けます</div>
   <div class="card dpick ${past ? 'past' : ''}"><input type="date" id="edate" value="${d.date}" max="${today()}"><span class="dlab">${past ? `${jdate(d.date)}の記録` : '今日の記録'}</span>${past ? '<button class="link" id="dtoday">今日にもどす</button>' : ''}</div>
   ${done ? `<div class="mini">${past ? 'この日' : '今日'}はもう${done}回提出しています。もう一度出すと、もう1件追加されます</div>` : ''}
@@ -428,6 +435,15 @@ function renderToday() {
   const tr = $('#toRep'); if (tr) tr.onclick = () => go('report');
   const tn = $('#toN'); if (tn) tn.onclick = () => go('snotice');
   const ts = $('#toSched'); if (ts) ts.onclick = () => go('sched');
+  document.querySelectorAll('[data-stgo]').forEach(b => b.onclick = () => {
+    saveDraft(); const x = S.stash[Number(b.dataset.stgo)]; if (!x) return;
+    S.stash = S.stash.filter(y => y !== x); if (draftHas(S.draft)) stashDraft(S.draft);
+    S.draft = Object.assign(x, { pick: x.date !== today() }); store.set('stash', S.stash); store.set('draft', S.draft); renderToday(); window.scrollTo(0, 0);
+  });
+  document.querySelectorAll('[data-stdel]').forEach(b => b.onclick = () => {
+    const x = S.stash[Number(b.dataset.stdel)]; if (!x || !confirm(`${jdate(x.date)}の書きかけを捨てます。よいですか？`)) return;
+    S.stash = S.stash.filter(y => y !== x); store.set('stash', S.stash); renderToday();
+  });
 }
 async function submit(priv) {
   if (S.viewAs) { toast('見るだけの画面です。提出はできません'); return; }
@@ -993,7 +1009,7 @@ function renderCoachJump() {
 }
 
 /* ===== 顧問：部員の画面で見る（見るだけ。データは顧問の一覧から作る） ===== */
-const VIEW_KEYS = ['sched', 'readN', 'entries', 'replies', 'notices', 'reports', 'jumps', 'name', 'me', 'role', 'tab', 'seen', 'seenN', 'seenRep', 'draft', 'outbox', 'member', 'cview', 'hq', 'starOnly', 'hmode'];
+const VIEW_KEYS = ['stash', 'sched', 'readN', 'entries', 'replies', 'notices', 'reports', 'jumps', 'name', 'me', 'role', 'tab', 'seen', 'seenN', 'seenRep', 'draft', 'outbox', 'member', 'cview', 'hq', 'starOnly', 'hmode'];
 function enterView(uid) {
   const m = (S.cd.members || []).find(x => x.id === uid); if (!m) return;
   S.viewBak = {}; VIEW_KEYS.forEach(k => S.viewBak[k] = S[k]);
@@ -1001,7 +1017,7 @@ function enterView(uid) {
   const es = (S.cd.entries || []).filter(e => e.uid === uid).map(e => Object.assign({}, e, { star: e.star === true || e.star === '1' }));
   const ids = new Set(es.map(e => e.id));
   const forMe = n => n.to === 'all' || n.to === uid || (/^grade:/.test(n.to) && String(n.targets || '').split(',').includes(uid));
-  S.entries = es; S.replies = (S.cd.replies || []).filter(r => ids.has(r.entryId)); S.notices = (S.cd.notices || []).filter(forMe);
+  S.stash = []; S.entries = es; S.replies = (S.cd.replies || []).filter(r => ids.has(r.entryId)); S.notices = (S.cd.notices || []).filter(forMe);
   S.reports = (S.cd.reports || []).filter(r => r.uid === uid || r.uid === 'team'); S.jumps = S.cd.jumps || []; S.sched = S.cd.schedule || [];
   S.name = m.name; S.me = uid; S.role = 'student'; S.tab = 'today'; S.member = null; S.cview = null; S.hq = ''; S.starOnly = false; S.hmode = 'all';
   S.seen = S.replies.map(rkey); S.seenN = S.notices.map(nkey); S.readN = (S.cd.reads || []).filter(r => r.uid === uid).map(r => ({ noticeId: r.noticeId, at: r.at || '' })); S.seenRep = S.reports.map(rkeyRep); S.draft = null; S.outbox = [];
