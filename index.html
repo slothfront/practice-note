@@ -47,6 +47,7 @@ textarea:focus,input:focus{outline:2px solid var(--blue);border-color:var(--blue
 .ev{display:flex;gap:10px;padding:5px 0;border-top:1px dashed var(--line2);font-size:14px;line-height:1.5}.ev:first-of-type{border-top:0}.evt{flex:0 0 92px;color:var(--gray);font-size:12.5px;padding-top:1px}.evn{flex:1;font-weight:700;color:var(--ink2)}.sday{margin-bottom:10px}.sday.stoday{border-left:6px solid var(--acc2)}.soon{width:100%;text-align:left;font:inherit;cursor:pointer;display:block;border:0}.soon .sdh{font-size:12px;font-weight:800;color:var(--main);margin-top:4px}
 mark.mg,mark.mb{color:inherit;padding:0 2px;border-radius:2px;font-weight:700}mark.mg{background:linear-gradient(transparent 45%,#FFE066 45%)}mark.mb{background:linear-gradient(transparent 45%,#FFB3C7 45%)}.mlegend{display:flex;gap:12px;justify-content:flex-end;font-size:12px;margin:6px 0 -4px}
 .updbar{position:fixed;left:12px;right:12px;bottom:14px;z-index:50;border:0;border-radius:14px;padding:14px;font:inherit;font-weight:800;font-size:15px;background:#FFE066;color:#1a1a1a;box-shadow:0 4px 14px rgba(0,0,0,.18);cursor:pointer}
+.dseg{margin:2px 0 6px}
 .tag.me{background:#E6E6E6!important;color:#444!important}.privnote{background:var(--soft);border-radius:12px;padding:10px 12px;font-size:12.5px;line-height:1.6;margin:14px 0 4px}.btn.ghost2{background:#fff;color:var(--main);border:2px solid var(--main);box-shadow:none;margin-top:10px}
 .nums{display:flex;gap:12px;font-size:12px;margin:6px 0;flex-wrap:wrap}.nums b{color:var(--navy);font-size:14px}
 .kv{font-size:13px;margin:4px 0;line-height:1.5}.kv .k{color:var(--gray);font-size:11px;display:block}
@@ -280,7 +281,7 @@ function forgetIfBadKey(e) {
 async function refresh() {
   if (S.viewAs) return true;
   if (S.role === 'coach') {
-    try { const j = await api('coachList', { key: S.key }); S.cd = { schedule: j.schedule || [], members: j.members, entries: j.entries, replies: j.replies, notices: j.notices || [], reads: j.reads || [], reports: parseReports(j.reports), jumps: j.jumps || [], coaches: j.coaches || [], cnotes: j.cnotes || [], creads: j.creads || [] }; if (j.me) { S.me = j.me; store.set('me', S.me); } store.set('cd', S.cd); return true; } catch (e) { forgetIfBadKey(e); return false; }
+    try { const j = await api('coachList', { key: S.key }); S.sched = j.schedule || []; store.set('sched', S.sched); S.cd = { schedule: j.schedule || [], members: j.members, entries: j.entries, replies: j.replies, notices: j.notices || [], reads: j.reads || [], reports: parseReports(j.reports), jumps: j.jumps || [], coaches: j.coaches || [], cnotes: j.cnotes || [], creads: j.creads || [] }; if (j.me) { S.me = j.me; store.set('me', S.me); } store.set('cd', S.cd); return true; } catch (e) { forgetIfBadKey(e); return false; }
   }
   try {
     await flush();
@@ -299,10 +300,11 @@ function shell(sub, body) {
     (S.viewAs ? `<div class="vbar"><span>${esc(S.name)}の画面（見るだけ）</span><button id="vexit">顧問の画面にもどる</button></div>` : '') +
     `<header><div class="t en">PRACTICE NOTE</div><div class="s">${esc(sub)}</div></header>` +
     (S.key && !S.needSet ? (S.role === 'coach'
-      ? `<nav>${[['new', '新しい記録'], ['members', '部員ごと'], ['notice', 'お知らせ'], ['creport', 'レポート'], ['cjump', 'ジャンプ'], ['cboard', '顧問']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'new' && unreplied().length ? `<span class="badge">${unreplied().length}</span>` : ''}${k === 'cboard' && unreadBoard().length ? `<span class="badge">${unreadBoard().length}</span>` : ''}</button>`).join('')}</nav>`
+      ? `<nav>${[['new', 'ホーム'], ['members', '部員ごと'], ['notice', 'お知らせ'], ['csched', '予定'], ['cdata', '試合と測定'], ['cboard', '顧問']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k || (k === 'cdata' && (S.tab === 'creport' || S.tab === 'cjump')) ? 'on' : ''}">${l}${k === 'new' && unreplied().length ? `<span class="badge">${unreplied().length}</span>` : ''}${k === 'cboard' && unreadBoard().length ? `<span class="badge">${unreadBoard().length}</span>` : ''}</button>`).join('')}</nav>`
       : `<nav class="six">${[['today', '今日の記録'], ['history', 'これまで'], ['graph', 'グラフ'], ['report', 'レポート'], ['snotice', 'お知らせ'], ['sched', '予定']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'history' && n ? `<span class="badge">返事 ${n}</span>` : ''}${k === 'report' && unseenRep().length ? '<span class="badge">NEW</span>' : ''}${k === 'snotice' && unseenN().length ? `<span class="badge">${unseenN().length}</span>` : ''}</button>`).join('')}</nav>`) : '') +
-    `<main>${body}</main>`;
-  document.querySelectorAll('nav button').forEach(b => b.onclick = () => go(b.dataset.tab));
+    `<main>${S.role === 'coach' && (S.tab === 'creport' || S.tab === 'cjump') ? `<div class="seg dseg"><button data-ds="creport" class="${S.tab === 'creport' ? 'on' : ''}">試合レポート</button><button data-ds="cjump" class="${S.tab === 'cjump' ? 'on' : ''}">ジャンプ測定</button></div>` : ''}${body}</main>`;
+  document.querySelectorAll('nav button').forEach(b => b.onclick = () => go(b.dataset.tab === 'cdata' ? (store.get('cdLast', 'creport')) : b.dataset.tab));
+  document.querySelectorAll('[data-ds]').forEach(b => b.onclick = () => { store.set('cdLast', b.dataset.ds); go(b.dataset.ds); });
   const vx = $('#vexit'); if (vx) vx.onclick = () => { exitView(); pushNav(); render(); window.scrollTo(0, 0); };
 }
 /* ---- スマホの戻るボタン：画面を切り替えるたびに履歴を1つ積み、戻るで前の画面にもどす ---- */
@@ -641,17 +643,20 @@ function renderCoach() {
   if (S.tab === 'notice') return renderNotices();
   if (S.tab === 'creport') return renderCoachReports();
   if (S.tab === 'cjump') return renderCoachJump();
+  if (S.tab === 'csched') return renderSchedule();
   if (S.tab === 'cboard') return renderBoard();
   if (S.tab === 'members') return S.member ? renderMember() : renderMembers();
   const list = cSort(S.showAll ? S.cd.entries : unreplied());
   const body = list.length ? list.map(e => entryHTML(e, { coach: true, open: true, who: memberName(e.uid), replies: cRepliesFor(e.id), tag: cRepliesFor(e.id).length ? '' : '<span class="tag">未返事</span>' })).join('')
     : `<p class="mini center" style="margin-top:40px">${S.showAll ? 'まだ記録がありません' : '返事を待っている記録はありません'}</p>`;
   shell('顧問用　' + S.name, `${todayBlock()}
+    ${schedSoon()}
     <div class="h"><span class="en">NOTES</span><span class="ja">${S.showAll ? '記録' : '返事を待っている記録'}</span></div>
     <div class="mini" style="margin:2px 0 10px">体の調子・気持ち・出来などに1か2がある記録は、左に黄色の線が付きます</div>
     <div class="list">${body}</div>
     <div class="foot"><button class="link" id="all">${S.showAll ? '返事を待っている記録だけ見る' : '返事済みも見る'}</button>　<button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);
   $('#all').onclick = () => { S.showAll = !S.showAll; render(); };
+  const tsc = $('#toSched'); if (tsc) tsc.onclick = () => go('csched');
   document.querySelectorAll('.tname').forEach(b => b.onclick = () => { S.tab = 'members'; S.member = b.dataset.uid; pushNav(); render(); window.scrollTo(0, 0); });
   bindCards(); bindReplies(); bindFoot();
 }
@@ -1074,7 +1079,9 @@ function schedSoon() {
 function renderSchedule() {
   const t = today(); const days = [];
   for (let i = 0; i < 21; i++) { const d = addDays(t, i); const es = schedOn(d); if (es.length) days.push([d, es]); }
-  shell(S.name, `<div class="h" style="margin-top:4px"><span class="en">SCHEDULE</span><span class="ja">予定（3週間先まで）</span></div>
+  const C = S.role === 'coach' && !S.viewAs;
+  shell(C ? '顧問用　' + S.name : S.name, `<div class="h" style="margin-top:4px"><span class="en">SCHEDULE</span><span class="ja">予定（3週間先まで）</span></div>
+    ${C ? '<div class="hint">部員のアプリに出ている予定です（Googleカレンダー「部活」から。名前に「顧問」が入る予定・頭に🔒の予定は出ていません）</div>' : ''}
     ${days.length ? days.map(([d, es]) => `<div class="card sday ${d === t ? 'stoday' : ''}"><div class="date"><span>${jdate(d)}</span>${d === t ? '<span class="tag">今日</span>' : d === addDays(t, 1) ? '<span class="tag wait">明日</span>' : ''}</div>${es.map(evHTML).join('')}</div>`).join('')
       : '<p class="mini center" style="margin:24px 0">3週間先までの予定はまだありません</p>'}
     <div class="foot"><button class="link" id="reload">最新にする</button></div>`);
@@ -1116,7 +1123,7 @@ window.addEventListener('online', async () => { await refresh(); render(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveDraft(); });
 /* 更新（再読み込み）しても同じ画面にとどまる：履歴に残した画面と、閉じる前のスクロール位置から戻す */
 const st0 = (() => { try { return history.state; } catch (e) { return null; } })();
-const TABS = { coach: ['new', 'members', 'notice', 'creport', 'cjump', 'cboard'], student: ['today', 'history', 'graph', 'report', 'snotice', 'sched'] };
+const TABS = { coach: ['new', 'members', 'notice', 'csched', 'creport', 'cjump', 'cboard'], student: ['today', 'history', 'graph', 'report', 'snotice', 'sched'] };
 if (S.key && !S.needSet && st0 && st0.pn) {
   if (S.role === 'coach' && st0.viewAs && (S.cd.members || []).some(m => m.id === st0.viewAs)) enterView(st0.viewAs);
   const ok = TABS[S.role === 'coach' ? 'coach' : 'student'];
