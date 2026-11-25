@@ -730,7 +730,7 @@ function statsHTML(p, notes, prev) {
   const cls = (a, b) => (a == null || b == null) ? '' : Math.round(a * 100) - Math.round(b * 100) >= 5 ? 'mg' : Math.round(a * 100) - Math.round(b * 100) <= -5 ? 'mb' : '';
   const M = (txt, c) => c ? `<mark class="${c}">${txt}</mark>` : txt;
   const kr = few ? '' : cls(n.krate, T.krate), ke = few ? '' : cls(n.keff, T.keff), se = (n.sv || 0) < 5 ? '' : cls(n.seff, T.seff);
-  const ten = x => x == null ? '' : `（10本で約${Math.round(x * 10)}本）`;
+  const ten = x => x == null ? '' : `（10本中 約${Math.round(x * 10)}本）`;
   const vs = prev ? prev.stats || {} : null;
   const cmp = (lab, a, b, f) => sl(lab, `${f(a)}　<span class="mini">前回 ${f(b)}${a != null && b != null && f === pct ? `（${pdiff(a, b)}）` : ''}</span>`);
   return `${MK_LEGEND}<div class="h"><span class="en">MATCH STATS</span><span class="ja">この試合の数字</span></div><div class="card">
