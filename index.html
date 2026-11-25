@@ -237,6 +237,8 @@ const pad = n => String(n).padStart(2, '0');
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 const WD = ['日', '月', '火', '水', '木', '金', '土'];
 const jdate = s => { const [y, m, d] = s.split('-').map(Number); const w = WD[new Date(y, m - 1, d).getDay()]; return `${m}月${d}日（${w}）`; };
+/* 「今日 9:34」「11/24（月）21:05」 */
+const whenText = iso => { const d = new Date(iso); if (isNaN(d)) return '—'; const hm = `${d.getHours()}:${pad(d.getMinutes())}`; const ld = localDate(iso); return ld === today() ? `今日 ${hm}` : `${Number(ld.slice(5, 7))}/${Number(ld.slice(8))}（${WD[d.getDay()]}）${hm}`; };
 const localDate = iso => { const d = new Date(iso); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 function toast(msg) { document.querySelectorAll('.toast').forEach(x => x.remove()); const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 2600); }
@@ -649,7 +651,8 @@ function renderMembers() {
     const es = cSort(S.cd.entries.filter(e => e.uid === m.id)); const last = es[0];
     const wait = es.filter(e => !e.priv && !S.cd.replies.some(r => r.entryId === e.id)).length;
     return `<div class="card member" data-uid="${m.id}"><div class="date"><span>${esc(m.name)}</span>${wait ? `<span class="tag">未返事 ${wait}</span>` : ''}</div>
-      <div class="mini">記録 ${es.length}件　${last ? `最後 ${jdate(last.date)}` : 'まだ記録なし'}${cnotesOf(m.id).length ? `　顧問メモ ${cnotesOf(m.id).length}件` : ''}</div>
+      <div class="mini">記録 ${es.length}件　${last ? `最後の記録 ${jdate(last.date)}` : 'まだ記録なし'}${cnotesOf(m.id).length ? `　顧問メモ ${cnotesOf(m.id).length}件` : ''}</div>
+      <div class="mini">最後に開いた ${m.last ? whenText(m.last) : '—'}${m.first ? '　<b>まだ自分の合言葉を決めていません</b>' : ''}</div>
       ${last ? `<div class="nums">意識できた <b>${last.n1}</b>　体の調子 <b>${last.n2}</b>　気持ち <b>${last.n3}</b>${last.type === 'match' ? `　出来 <b>${last.n4}</b>` : ''}</div>` : ''}</div>`;
   }).join('');
   shell('顧問用　' + S.name, `<div class="list">${rows || '<p class="mini center">部員がまだいません</p>'}</div><div class="foot"><button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);

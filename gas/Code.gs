@@ -9,7 +9,7 @@
  */
 const PROP_ID = 'PN_SHEET_ID';
 const COLS = {
-  members: ['合言葉', 'id', '名前', '役割', '初回', '学年'],
+  members: ['合言葉', 'id', '名前', '役割', '初回', '学年', '最後に開いた'],
   entries: ['id', 'uid', 'date', 'type', 'focus', 'opp', 'n1', 'n2', 'n3', 'n4', 'r1', 'r2', 'r3', 'r4',
             'good', 'bad', 'heard', 'mgood', 'mbad', 'tgood', 'tbad', 'mprac', 'tocoach', 'next', 'at', 'received', 'star', 'priv'],
   replies: ['id', 'entryId', 'text', 'at', 'by', 'byId', 'edited'],
@@ -74,6 +74,7 @@ function handle_(b) {
   if (!user) return { ok: false, error: '合言葉がちがいます' };
   const coach = user.role === 'coach';
   const a = b.action;
+  if (a === 'login' || a === 'list' || a === 'coachList') touch_(book, user);
   if (a === 'login') return { ok: true, name: user.name, me: user.id, role: coach ? 'coach' : 'student', needSet: user.first };
   if (a === 'setKey') {
     const nk = String(b.newKey || '').trim();
@@ -107,7 +108,7 @@ function handle_(b) {
     return { ok: true, name: user.name, entries, replies, notices, readN, reports, jumps: jumpsOf_(book), feat: ['priv'] };
   }
   if (a === 'coachList' && coach) {
-    const members = readAll_(book.getSheetByName(SHEET.members)).filter(r => r['役割'] !== 'coach' && r['名前']).map(r => ({ id: String(r.id), name: String(r['名前']), grade: gradeOf_(r['学年']) }));
+    const members = readAll_(book.getSheetByName(SHEET.members)).filter(r => r['役割'] !== 'coach' && r['名前']).map(r => ({ id: String(r.id), name: String(r['名前']), grade: gradeOf_(r['学年']), last: String(r['最後に開いた'] || ''), first: String(r['初回'] || '') !== '' }));
     const entries = readAll_(book.getSheetByName(SHEET.entries)).map(r => hidePriv_(Object.assign(clean_(r), { uid: String(r.uid) })));
     const replies = readAll_(book.getSheetByName(SHEET.replies)).map(cleanR_);
     const notices = readAll_(book.getSheetByName(SHEET.notices)).map(cleanN_);
@@ -349,6 +350,20 @@ function findUser_(book, key) {
   key = String(key || '').trim(); if (!key) return null;
   const r = readAll_(book.getSheetByName(SHEET.members)).find(x => String(x['合言葉']) === key && x['名前']);
   return r ? { id: String(r.id), name: String(r['名前']), role: String(r['役割'] || 'student'), first: String(r['初回'] || '') !== '', grade: gradeOf_(r['学年']) } : null;
+}
+/** アプリを開いた時刻を「部員」シートの「最後に開いた」に残す（5分以内の書き直しはしない） */
+function touch_(book, user) {
+  try {
+    const sh = book.getSheetByName(SHEET.members); const v = sh.getDataRange().getValues(); const h = v[0];
+    const ci = h.indexOf('最後に開いた'), ii = h.indexOf('id'); if (ci < 0 || ii < 0) return;
+    const now = new Date();
+    for (let i = 1; i < v.length; i++) {
+      if (String(v[i][ii]) !== user.id) continue;
+      const prev = Date.parse(String(v[i][ci] || ''));
+      if (!(prev && now - prev < 5 * 60 * 1000)) sh.getRange(i + 1, ci + 1).setValue(now.toISOString());
+      return;
+    }
+  } catch (e) {}
 }
 function readAll_(sh) {
   const v = sh.getDataRange().getValues(); const h = v[0];
