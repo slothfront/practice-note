@@ -51,6 +51,7 @@ mark.mg,mark.mb{color:inherit;padding:0 2px;border-radius:2px;font-weight:700}ma
 .stash{display:flex;align-items:center;gap:10px;justify-content:space-between;border-left:6px solid var(--acc2);margin-bottom:12px}.stash .rbtns{margin:0;flex:0 0 auto}
 .tag.self{background:#D9F2E6!important;color:#13664A!important}.minrow{display:flex;align-items:center;gap:8px}.minrow input{width:120px;flex:0 0 auto}.minrow span{font-weight:700}
 .wbars{margin-top:8px}.wbar{display:flex;align-items:center;gap:8px;font-size:12px;margin:3px 0}.wbar .wl{flex:0 0 52px;color:var(--gray)}.wbar .wb{flex:1;height:10px;background:var(--soft);border-radius:5px;overflow:hidden}.wbar .wb i{display:block;height:100%;background:#2E9E6E;border-radius:5px}.wbar .wm{flex:0 0 46px;text-align:right}
+details.lastm>summary{list-style:none;cursor:pointer}.lmhint{white-space:nowrap;flex:0 0 auto;margin-left:8px}details.lastm>summary::-webkit-details-marker{display:none}details.lastm:not([open])>summary .date{margin:0}
 .tag.me{background:#E6E6E6!important;color:#444!important}.privnote{background:var(--soft);border-radius:12px;padding:10px 12px;font-size:12.5px;line-height:1.6;margin:14px 0 4px}.btn.ghost2{background:#fff;color:var(--main);border:2px solid var(--main);box-shadow:none;margin-top:10px}
 .nums{display:flex;gap:12px;font-size:12px;margin:6px 0;flex-wrap:wrap}.nums b{color:var(--navy);font-size:14px}
 .kv{font-size:13px;margin:4px 0;line-height:1.5}.kv .k{color:var(--gray);font-size:11px;display:block}
@@ -276,7 +277,7 @@ async function flush() {
     catch (err) { if (err.server) { /* 受け口が断った */ } break; }
   }
 }
-const clearLocal = () => ['key', 'name', 'role', 'needSet', 'me', 'entries', 'replies', 'outbox', 'seen', 'draft', 'cd', 'notices', 'seenN', 'reportedN', 'reports', 'seenRep', 'jumps', 'readN', 'stash', 'sched', 'feat', 'cdLast'].forEach(k => store.del(k));
+const clearLocal = () => ['key', 'name', 'role', 'needSet', 'me', 'entries', 'replies', 'outbox', 'seen', 'draft', 'cd', 'notices', 'seenN', 'reportedN', 'reports', 'seenRep', 'jumps', 'readN', 'stash', 'sched', 'feat', 'cdLast', 'lmShut'].forEach(k => store.del(k));
 function forgetIfBadKey(e) {
   if (e && e.server && /先に自分の合言葉/.test(e.message || '')) { S.needSet = true; store.set('needSet', true); render(); return; }
   if (e && e.server && /合言葉/.test(e.message || '')) { clearLocal(); location.reload(); }
@@ -441,6 +442,7 @@ function renderToday() {
   $('#edate').addEventListener('change', e => setDate(e.target.value));
   const dt = $('#dtoday'); if (dt) dt.onclick = () => setDate(today());
   const tr = $('#toRep'); if (tr) tr.onclick = () => go('report');
+  const lm = $('#lastm'); if (lm) lm.addEventListener('toggle', () => { const r = myReports()[0]; if (!r) return; store.set('lmShut', lm.open ? '' : rkeyRep(r)); const h = lm.querySelector('.lmhint'); if (h) h.textContent = lm.open ? '▲ 閉じる' : '▼ 開く'; });
   const tn = $('#toN'); if (tn) tn.onclick = () => go('snotice');
   const ts = $('#toSched'); if (ts) ts.onclick = () => go('sched');
   document.querySelectorAll('[data-stgo]').forEach(b => b.onclick = () => {
@@ -839,11 +841,13 @@ function prevOf(r, list) { const i = list.indexOf(r); return list.slice(i + 1).f
 function lastMatchCard() {
   const r = myReports()[0]; if (!r) return '';
   const n = r.d.player.stats || {}; const sm = r.d.player.summary || {}; const few = (n.att || 0) < 5;
-  return `<div class="lastm"><div class="date"><span>LAST MATCH　<span class="mini">${esc(r.d.match.title)}（${esc(jdate(r.d.match.date))}）</span></span></div>
+  /* たためる。閉じたことは覚えておき、新しい試合のレポートが来たらまた開く */
+  const shut = store.get('lmShut', '') === rkeyRep(r);
+  return `<details class="lastm" id="lastm" ${shut ? '' : 'open'}><summary><div class="date"><span>LAST MATCH　<span class="mini">${esc(r.d.match.title)}（${esc(jdate(r.d.match.date))}）</span></span><span class="mini lmhint">${shut ? '▼ 開く' : '▲ 閉じる'}</span></div></summary>
     <div style="margin:6px 0">${sl('スパイク', `決定 ${n.kill}・ミス ${n.serr}${few ? '' : `（第2〜第5セットの効果率 ${pct(n.keff)}）`}`)}${sl('サーブ', `${n.sv}本・エース ${n.ace}・ミス ${n.sverr}`)}${sl('サーブレシーブ', `ミス ${n.recv}`)}</div>
     <div class="kv"><span class="k">FOCUS　伸ばしてほしいところ</span>${esc(sm.focus)}</div>
     <div class="kv"><span class="k">NEXT WEEK　次の1週間で意識すること</span>${esc(sm.next)}</div>
-    <button class="toggle" id="toRep">レポートを全部見る</button></div>`;
+    <button class="toggle" id="toRep">レポートを全部見る</button></details>`;
 }
 function renderReports() {
   const list = myReports(); const fresh = unseenRep().map(rkeyRep);
