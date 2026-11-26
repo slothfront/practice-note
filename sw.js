@@ -5,7 +5,7 @@
 // 記録（localStorage）と、GASへの送受信には触らない。
 const CACHE = 'pnote-v2';
 const PAGE = './';
-const PRECACHE = ['./', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'favicon-32.png', 'logo-wine.png', 'logo-navy.png', 'bg-ball-wine.png', 'bg-ball-navy.png'];
+const PRECACHE = ['./', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'favicon-32.png', 'logo-wine.png', 'logo-navy.png', 'bg-ball-wine.png', 'bg-ball-navy.png', 'plate-pink.png', 'plate-lav.png'];
 const WAIT_MS = 3000;
 
 self.addEventListener('install', (e) => {
