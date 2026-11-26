@@ -196,9 +196,12 @@ header .ttl i{font-family:"Teko",sans-serif;font-weight:500;font-size:13px;lette
 .lastm .date>span:first-child,.notice .date b{font-weight:800}
 /* タブの後ろは背景の色で塗る（下の文字が透けないように） */
 nav{background:var(--bg)!important;backdrop-filter:none!important}
-/* いちばん下のロゴ板 */
-.plate{position:relative;z-index:1;margin-top:28px;padding:30px 16px calc(34px + env(safe-area-inset-bottom));background:linear-gradient(160deg,#5A1A2E,#3C0F1E);text-align:center}
-html.is-coach .plate{background:linear-gradient(160deg,#13284D,#0A1833)}
+/* 上の帯はシンプルに（ロゴと一文は、いちばん下のロゴに任せる） */
+header{background:var(--hd1)!important}
+header .t{font-family:"Teko",sans-serif!important;font-weight:700!important;font-style:normal!important;font-size:30px!important;letter-spacing:.08em!important;line-height:.9;color:var(--hdtx)}
+header .t:after{content:none!important}
+/* いちばん下のロゴ（板は無しで文字だけ） */
+.plate{position:relative;z-index:1;margin-top:22px;padding:18px 16px calc(30px + env(safe-area-inset-bottom));text-align:center;opacity:.9}
 .plate img{display:block;margin:0 auto;width:72%;max-width:300px;height:auto}
 .plate .pl-c{display:none}html.is-coach .plate .pl-s{display:none}html.is-coach .plate .pl-c{display:block}
 </style>
@@ -360,11 +363,11 @@ function shell(sub, body) {
   const tc = document.querySelector('meta[name=theme-color]'); if (tc) tc.setAttribute('content', C ? '#B6B3C8' : '#E2AEB7');
   $('#app').innerHTML = (DEMO ? '<div class="demo">見本モード（本物には送られません）</div>' : '') +
     (S.viewAs ? `<div class="vbar"><span>${esc(S.name)}の画面（見るだけ）</span><button id="vexit">顧問の画面にもどる</button></div>` : '') +
-    `<header><div class="tm"><img class="lg lg-s" src="logo-wine.png" alt="KCVC"><img class="lg lg-c" src="logo-navy.png" alt="KCVC"><span class="ttl"><b>PRACTICE NOTE</b><i>HIGHER. STRONGER. QUICKER. TOGETHER.</i></span></div><div class="s">${esc(sub)}</div></header>` +
+    `<header><div class="t en">PRACTICE NOTE</div><div class="s">${esc(sub)}</div></header>` +
     (S.key && !S.needSet ? (S.role === 'coach'
       ? `<nav>${[['new', 'ホーム'], ['members', '部員ごと'], ['notice', 'お知らせ'], ['csched', '予定'], ['cdata', '試合と測定'], ['cboard', '顧問']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k || (k === 'cdata' && (S.tab === 'creport' || S.tab === 'cjump')) ? 'on' : ''}">${l}${k === 'new' && unreplied().length ? `<span class="badge">${unreplied().length}</span>` : ''}${k === 'cboard' && unreadBoard().length ? `<span class="badge">${unreadBoard().length}</span>` : ''}</button>`).join('')}</nav>`
       : `<nav class="six">${[['today', '今日の記録'], ['history', 'これまで'], ['graph', 'グラフ'], ['report', 'レポート'], ['snotice', 'お知らせ'], ['sched', '予定']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'history' && n ? `<span class="badge">返事 ${n}</span>` : ''}${k === 'report' && unseenRep().length ? '<span class="badge">NEW</span>' : ''}${k === 'snotice' && unseenN().length ? `<span class="badge">${unseenN().length}</span>` : ''}</button>`).join('')}</nav>`) : '') +
-    `<main>${S.role === 'coach' && (S.tab === 'creport' || S.tab === 'cjump') ? `<div class="seg dseg"><button data-ds="creport" class="${S.tab === 'creport' ? 'on' : ''}">試合レポート</button><button data-ds="cjump" class="${S.tab === 'cjump' ? 'on' : ''}">ジャンプ測定</button></div>` : ''}${body}</main><footer class="plate"><img class="pl-s" src="plate-pink.png" alt="KIMITSU COMMERCIAL HS KCVC VOLLEYBALL CLUB"><img class="pl-c" src="plate-lav.png" alt="KIMITSU COMMERCIAL HS KCVC VOLLEYBALL CLUB"></footer>`;
+    `<main>${S.role === 'coach' && (S.tab === 'creport' || S.tab === 'cjump') ? `<div class="seg dseg"><button data-ds="creport" class="${S.tab === 'creport' ? 'on' : ''}">試合レポート</button><button data-ds="cjump" class="${S.tab === 'cjump' ? 'on' : ''}">ジャンプ測定</button></div>` : ''}${body}</main><footer class="plate"><img class="pl-s" src="plate-wine.png" alt="KIMITSU COMMERCIAL HS KCVC VOLLEYBALL CLUB"><img class="pl-c" src="plate-navy.png" alt="KIMITSU COMMERCIAL HS KCVC VOLLEYBALL CLUB"></footer>`;
   document.querySelectorAll('nav button').forEach(b => b.onclick = () => go(b.dataset.tab === 'cdata' ? (store.get('cdLast', 'creport')) : b.dataset.tab));
   document.querySelectorAll('[data-ds]').forEach(b => b.onclick = () => { store.set('cdLast', b.dataset.ds); go(b.dataset.ds); });
   const vx = $('#vexit'); if (vx) vx.onclick = () => { exitView(); pushNav(); render(); window.scrollTo(0, 0); };

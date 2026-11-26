@@ -34,16 +34,16 @@
 ## デザイン
 
 - 部員の画面＝くすみピンク×ワイン（トレーナーの色案C7）、顧問の画面＝ラベンダーグレー×ネイビー（C9）
-- 上の帯に部のロゴ（ボール＋KCVC。`logo-wine.png`・`logo-navy.png`）と一文「HIGHER. STRONGER. QUICKER. TOGETHER.」
+- 上の帯はシンプル（PRACTICE NOTE と日付・名前だけ）
 - 背景に部のボールを大きくうすく（`bg-ball-*.png`）。カードは少しすかす
 - ホーム画面のアイコン＝白いボール＋KCVC（ワイン地）。英字の見出しと数字は Teko（見出しは大きく斜めにピンクの影）、日本語は Noto Sans JP
-- どの画面もいちばん下に、背中のロゴ（KIMITSU COMMERCIAL HS／KCVC／VOLLEYBALL CLUB／一文）の板（`plate-*.png`）
+- どの画面もいちばん下に、背中のロゴ（KIMITSU COMMERCIAL HS／KCVC／VOLLEYBALL CLUB／一文）（`plate-*.png`・板は無しで文字だけ）
 
 ## ファイル
 
 - `index.html`：アプリ本体（部員と顧問の画面。合言葉で切り替わる）
 - `sw.js`：電波が無くても開けるようにする仕組み（サービスワーカー）。記録の送受信には触らない
-- `manifest.webmanifest`・アイコン類・`logo-*.png`：ホーム画面に追加したときの名前と絵、上の帯のロゴ
+- `manifest.webmanifest`・アイコン類・`plate-*.png`・`bg-ball-*.png`：ホーム画面に追加したときの名前と絵、いちばん下のロゴ、背景のボール
 - `gas/Code.gs`：記録をためるGoogleの表とのやり取り（Google Apps Script）
 - `gas/appsscript.json`：GASの設定（タイムゾーン・ウェブアプリの公開範囲・使う許可＝表とカレンダーの読み取り）
 - `gas-updater/`：GASを自動で入れ替える「更新係」（別のスクリプト）
