@@ -178,7 +178,13 @@ mark.mb{background:linear-gradient(transparent 45%,#FF9AB3 45%)!important}
 /* 背景に部のボール（うすく大きく）。カードは少しすかして所属感を出す */
 body::before{content:"";position:fixed;z-index:0;pointer-events:none;width:118vw;height:118vw;max-width:760px;max-height:760px;right:-38vw;bottom:-22vw;background:url(bg-ball-wine.png) center/contain no-repeat;opacity:.075;transform:rotate(-14deg)}
 html.is-coach body::before{background-image:url(bg-ball-navy.png)}
-main,nav,header,.vbar{position:relative;z-index:1}nav{position:sticky}header{position:sticky}
+/* 重なりの順：上から 見るだけの帯(.vbar) ＞ タブ(nav) ＞ 上の帯(header) ＞ 中身(main)。
+   上の帯はスクロールで流し、タブだけを画面の上に止める（中身がタブの上に重ならないように） */
+main,footer{position:relative;z-index:1}
+header{position:relative!important;top:auto!important;z-index:3!important}
+nav{position:sticky!important;top:0!important;z-index:5!important;background:var(--bg)!important;box-shadow:0 6px 10px -8px rgba(0,0,0,.25)}
+.vbar{position:sticky!important;top:0!important;z-index:7!important}
+.vbar~nav{top:var(--vbarh,40px)!important}
 .card,.lastm,.notice,.seg,.privnote{background:rgba(255,255,255,.9)!important;backdrop-filter:blur(1.5px)}
 /* 文字：英語の見出しと数字は Teko。見出しは大きく斜めにして影をつけ、日本語の小見出しは札にする */
 .en{font-family:"Teko","Noto Sans JP",sans-serif!important}
@@ -370,6 +376,7 @@ function shell(sub, body) {
     `<main>${S.role === 'coach' && (S.tab === 'creport' || S.tab === 'cjump') ? `<div class="seg dseg"><button data-ds="creport" class="${S.tab === 'creport' ? 'on' : ''}">試合レポート</button><button data-ds="cjump" class="${S.tab === 'cjump' ? 'on' : ''}">ジャンプ測定</button></div>` : ''}${body}</main><footer class="plate"><img class="pl-s" src="plate-wine.png" alt="KIMITSU COMMERCIAL HS KCVC VOLLEYBALL CLUB"><img class="pl-c" src="plate-navy.png" alt="KIMITSU COMMERCIAL HS KCVC VOLLEYBALL CLUB"></footer>`;
   document.querySelectorAll('nav button').forEach(b => b.onclick = () => go(b.dataset.tab === 'cdata' ? (store.get('cdLast', 'creport')) : b.dataset.tab));
   document.querySelectorAll('[data-ds]').forEach(b => b.onclick = () => { store.set('cdLast', b.dataset.ds); go(b.dataset.ds); });
+  const vb = document.querySelector('.vbar'); if (vb) document.documentElement.style.setProperty('--vbarh', vb.offsetHeight + 'px');
   const vx = $('#vexit'); if (vx) vx.onclick = () => { exitView(); pushNav(); render(); window.scrollTo(0, 0); };
 }
 /* ---- スマホの戻るボタン：画面を切り替えるたびに履歴を1つ積み、戻るで前の画面にもどす ---- */
