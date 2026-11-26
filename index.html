@@ -765,8 +765,11 @@ function renderCoach() {
   const list = cSort(S.showAll ? S.cd.entries : unreplied());
   const body = list.length ? list.map(e => entryHTML(e, { coach: true, open: true, who: memberName(e.uid), replies: cRepliesFor(e.id), tag: cRepliesFor(e.id).length ? '' : '<span class="tag">未返事</span>' })).join('')
     : `<p class="mini center" style="margin-top:40px">${S.showAll ? 'まだ記録がありません' : '返事を待っている記録はありません'}</p>`;
-  shell('顧問用　' + S.name, `${todayBlock()}
-    ${schedSoon()}
+  /* ホームの順：予定 → 今日の記録 → 昨日の記録 → 返事を待っている記録 */
+  shell('顧問用　' + S.name, `<div class="h" style="margin-top:4px"><span class="en">SCHEDULE</span><span class="ja">今日と明日の予定</span></div>
+    ${schedSoon() || '<button class="card soon" id="toSched"><div class="mini">今日と明日の予定はありません（押すと予定のタブを開きます）</div></button>'}
+    ${todayBlock(today(), 'TODAY', '今日の記録')}
+    ${todayBlock(addDays(today(), -1), 'YESTERDAY', '昨日の記録')}
     <div class="h"><span class="en">NOTES</span><span class="ja">${S.showAll ? '記録' : '返事を待っている記録'}</span></div>
     <div class="mini" style="margin:2px 0 10px">体の調子・気持ち・出来などに1か2がある記録は、左に黄色の線が付きます</div>
     <div class="list">${body}</div>
@@ -776,15 +779,15 @@ function renderCoach() {
   document.querySelectorAll('.tname').forEach(b => b.onclick = () => { S.tab = 'members'; S.member = b.dataset.uid; pushNav(); render(); window.scrollTo(0, 0); });
   bindCards(); bindReplies(); bindFoot();
 }
-/* 顧問の最初の画面：今日（記録の日付が今日）記録した部員の数と名前。「自分だけ」の記録も数える */
-function todayBlock() {
-  const mem = S.cd.members || []; const t = today();
+/* 顧問のホーム：その日（記録の日付）に記録した部員の数と名前。「自分だけ」の記録も数える。今日と昨日の2つを出す */
+function todayBlock(t = today(), en = 'TODAY', ja = '今日の記録') {
+  const mem = S.cd.members || [];
   const done = mem.filter(m => S.cd.entries.some(e => e.uid === m.id && e.date === t));
   const yet = mem.filter(m => !done.includes(m));
   const nm = (m, mark) => `<button class="tname" data-uid="${m.id}">${esc(m.name)}${mark ? '<span class="mini">（自分だけ）</span>' : ''}</button>`;
   const onlyMe = m => { const es = S.cd.entries.filter(e => e.uid === m.id && e.date === t); return es.length && es.every(e => e.priv); };
-  return `<div class="h" style="margin-top:4px"><span class="en">TODAY</span><span class="ja">今日の記録　${jdate(t)}</span></div>
-    <div class="card tcount"><div class="tnum"><b>${done.length}</b><span>／${mem.length}人</span></div>
+  return `<div class="h"><span class="en">${en}</span><span class="ja">${ja}</span></div>
+    <div class="card tcount"><div class="tnum"><b>${done.length}</b><span>／${mem.length}人　<span class="mini">${jdate(t)}</span></span></div>
     <div class="trow"><span class="k">書いた</span>${done.length ? done.map(m => nm(m, onlyMe(m))).join('') : '<span class="mini">まだいません</span>'}</div>
     <div class="trow"><span class="k">まだ</span>${yet.length ? yet.map(m => nm(m)).join('') : '<span class="mini">全員書きました</span>'}</div></div>`;
 }
