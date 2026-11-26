@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#22B3A6">
+<meta name="theme-color" content="#E2AEB7">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -70,7 +70,7 @@ details.lastm>summary{list-style:none;cursor:pointer}.lmhint{white-space:nowrap;
 </style>
 
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=Oswald:wght@500;600;700&family=Noto+Sans+JP:wght@500;700;900&display=swap" rel="stylesheet">
 <style>
 body{font-family:"M PLUS Rounded 1c","Hiragino Maru Gothic ProN","Noto Sans JP",sans-serif;background:var(--bg)}
 .en{font-family:"M PLUS Rounded 1c",Arial,sans-serif;font-weight:800;font-style:italic;letter-spacing:.04em}
@@ -143,6 +143,38 @@ details.mrep{margin-bottom:10px}details.mrep>summary{list-style:none;cursor:poin
 details.mrep>summary::-webkit-details-marker{display:none}
 .mapr{display:flex;align-items:center;gap:8px;margin:6px 0}.mapr span{width:96px;font-size:13px;font-weight:700}.mapr select{flex:1}
 select{width:100%;border:2px solid var(--line2,#d0d7e1);border-radius:14px;padding:10px;font:inherit;font-size:16px;background:#fff}
+</style>
+<style>
+/* ===== チームのデザイン（2026-11-26）：部員＝C7 くすみピンク×ワイン／顧問＝C9 ラベンダーグレー×ネイビー。
+   トレーナーのロゴ（ボール＋KCVC）と一文「HIGHER. STRONGER. QUICKER. TOGETHER.」 ===== */
+:root{--main:#5A1A2E;--ink2:#5A1A2E;--acc2:#E2AEB7;--soft:#F8ECEE;--line2:#EBD6DB;--bg:#FAF3F4;--btn:#5A1A2E;--btntext:#fff;--btnshadow:#3C0F1E;--navy:#5A1A2E;--blue:#8E4A5C;--pale:#F8ECEE;--hd1:#E8B7BF;--hd2:#D497A2;--hdtx:#5A1A2E;--tabon:#fff}
+html.is-coach{--main:#13284D;--ink2:#13284D;--acc2:#C9C6DA;--soft:#EEEDF4;--line2:#DCDAE6;--bg:#F3F2F7;--btn:#13284D;--btntext:#fff;--btnshadow:#0A1833;--navy:#13284D;--blue:#47507A;--pale:#EEEDF4;--hd1:#A9A6BD;--hd2:#C6C3D6;--hdtx:#13284D}
+body{font-family:"Noto Sans JP","Hiragino Sans","M PLUS Rounded 1c",sans-serif}
+.en{font-family:"Oswald","Noto Sans JP",sans-serif!important;font-style:normal!important;font-weight:700;letter-spacing:.08em}
+header{background:linear-gradient(120deg,var(--hd1),var(--hd2))!important;border-radius:0!important;padding:12px 18px 10px!important;color:var(--hdtx)!important}
+header .s{color:var(--hdtx)!important;opacity:.85}
+header .tm{display:flex;align-items:center;gap:12px}
+header .lg{height:32px;width:auto;display:block}
+header .lg-c{display:none}html.is-coach header .lg-s{display:none}html.is-coach header .lg-c{display:block}
+header .ttl{display:flex;flex-direction:column;line-height:1.2;min-width:0}
+header .ttl b{font-family:"Oswald",sans-serif;font-weight:600;font-size:15px;letter-spacing:.22em;color:var(--hdtx);white-space:nowrap}
+header .ttl i{font-family:"Oswald",sans-serif;font-style:normal;font-weight:500;font-size:9px;letter-spacing:.12em;color:var(--hdtx);opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+nav button{border-radius:10px!important;font-weight:700}
+nav button.on{background:var(--main)!important;color:#fff!important}
+nav button.on .badge,nav button.on .tag{background:var(--acc2)!important;color:var(--ink2)!important}
+.h .en{font-size:22px!important;color:var(--ink2)!important;background:none!important;border-bottom:3px solid var(--acc2);padding-bottom:0;line-height:1.25}
+.h .ja{color:var(--blue)!important}
+.card,.lastm,.notice,.seg{border-radius:12px!important}
+.lastm,.notice{border-left-color:var(--main)!important}
+.btn{border-radius:12px!important;font-weight:900}
+.seg button{border-radius:10px!important}.seg button.on{background:var(--main)!important;color:#fff!important}
+.dot.on{background:var(--main)!important;border-color:var(--main)!important;color:#fff}
+.nums b,.tcount .tnum b{color:var(--main)!important}
+.badge,.tag{background:var(--acc2)!important;color:var(--ink2)!important}
+.tag.match{background:var(--main)!important;color:#fff!important}
+.tag.wait{background:var(--pale)!important;color:var(--ink2)!important}
+mark.mb{background:linear-gradient(transparent 45%,#FF9AB3 45%)!important}
+.vbar button{background:#13284D!important;border-color:#13284D!important}
 </style>
 </head>
 <body>
@@ -299,10 +331,10 @@ async function refresh() {
 function shell(sub, body) {
   const n = S.role === 'coach' ? 0 : unseen().length;
   const C = S.role === 'coach' && !!S.key && !S.needSet; document.documentElement.classList.toggle('is-coach', C);
-  const tc = document.querySelector('meta[name=theme-color]'); if (tc) tc.setAttribute('content', C ? '#5B4B9A' : '#22B3A6');
+  const tc = document.querySelector('meta[name=theme-color]'); if (tc) tc.setAttribute('content', C ? '#B6B3C8' : '#E2AEB7');
   $('#app').innerHTML = (DEMO ? '<div class="demo">見本モード（本物には送られません）</div>' : '') +
     (S.viewAs ? `<div class="vbar"><span>${esc(S.name)}の画面（見るだけ）</span><button id="vexit">顧問の画面にもどる</button></div>` : '') +
-    `<header><div class="t en">PRACTICE NOTE</div><div class="s">${esc(sub)}</div></header>` +
+    `<header><div class="tm"><img class="lg lg-s" src="logo-wine.png" alt="KCVC"><img class="lg lg-c" src="logo-navy.png" alt="KCVC"><span class="ttl"><b>PRACTICE NOTE</b><i>HIGHER. STRONGER. QUICKER. TOGETHER.</i></span></div><div class="s">${esc(sub)}</div></header>` +
     (S.key && !S.needSet ? (S.role === 'coach'
       ? `<nav>${[['new', 'ホーム'], ['members', '部員ごと'], ['notice', 'お知らせ'], ['csched', '予定'], ['cdata', '試合と測定'], ['cboard', '顧問']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k || (k === 'cdata' && (S.tab === 'creport' || S.tab === 'cjump')) ? 'on' : ''}">${l}${k === 'new' && unreplied().length ? `<span class="badge">${unreplied().length}</span>` : ''}${k === 'cboard' && unreadBoard().length ? `<span class="badge">${unreadBoard().length}</span>` : ''}</button>`).join('')}</nav>`
       : `<nav class="six">${[['today', '今日の記録'], ['history', 'これまで'], ['graph', 'グラフ'], ['report', 'レポート'], ['snotice', 'お知らせ'], ['sched', '予定']].map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'history' && n ? `<span class="badge">返事 ${n}</span>` : ''}${k === 'report' && unseenRep().length ? '<span class="badge">NEW</span>' : ''}${k === 'snotice' && unseenN().length ? `<span class="badge">${unseenN().length}</span>` : ''}</button>`).join('')}</nav>`) : '') +
@@ -1217,7 +1249,7 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
     try {
       const res = await fetch('./?v=' + Date.now(), { cache: 'no-store' }); if (!res.ok) return;
       const txt = await res.text(); if (txt.indexOf('PRACTICE NOTE') < 0 || txt.indexOf(self) >= 0) return;
-      try { const c = await caches.open('pnote-v1'); await c.put('./', new Response(txt, { headers: { 'Content-Type': 'text/html; charset=utf-8' } })); } catch (e) {}
+      try { const c = await caches.open('pnote-v2'); await c.put('./', new Response(txt, { headers: { 'Content-Type': 'text/html; charset=utf-8' } })); } catch (e) {}
       let prev = 0; try { prev = Number(sessionStorage.getItem('pn_upd') || 0); } catch (e) {}
       if (!touched && Date.now() - born < 10000 && Date.now() - prev > 60000) {
         try { sessionStorage.setItem('pn_upd', String(Date.now())); } catch (e) {}

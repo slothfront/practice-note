@@ -31,11 +31,18 @@
 
 見出しは英語＋日本語で、いつも白い四角の上に置く（中身だけを白い四角に入れる）。
 
+## デザイン
+
+- 部員の画面＝くすみピンク×ワイン（トレーナーの色案C7）、顧問の画面＝ラベンダーグレー×ネイビー（C9）
+- 上の帯に部のロゴ（ボール＋KCVC。`logo-wine.png`・`logo-navy.png`）と一文「HIGHER. STRONGER. QUICKER. TOGETHER.」
+- ホーム画面のアイコン＝白いボール＋KCVC（ワイン地）。英字は Oswald、日本語は Noto Sans JP
+- 学校名の入ったロゴ（KIMITSU COMMERCIAL HS）は、公開ページなので置いていない
+
 ## ファイル
 
 - `index.html`：アプリ本体（部員と顧問の画面。合言葉で切り替わる）
 - `sw.js`：電波が無くても開けるようにする仕組み（サービスワーカー）。記録の送受信には触らない
-- `manifest.webmanifest`・アイコン類：ホーム画面に追加したときの名前と絵
+- `manifest.webmanifest`・アイコン類・`logo-*.png`：ホーム画面に追加したときの名前と絵、上の帯のロゴ
 - `gas/Code.gs`：記録をためるGoogleの表とのやり取り（Google Apps Script）
 - `gas/appsscript.json`：GASの設定（タイムゾーン・ウェブアプリの公開範囲・使う許可＝表とカレンダーの読み取り）
 - `gas-updater/`：GASを自動で入れ替える「更新係」（別のスクリプト）

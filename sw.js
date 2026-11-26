@@ -3,9 +3,9 @@
 // - アイコン・manifest：控えを先に出す
 // - 字（Google Fonts）：一度読めたものは控えておく
 // 記録（localStorage）と、GASへの送受信には触らない。
-const CACHE = 'pnote-v1';
+const CACHE = 'pnote-v2';
 const PAGE = './';
-const PRECACHE = ['./', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'favicon-32.png'];
+const PRECACHE = ['./', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'favicon-32.png', 'logo-wine.png', 'logo-navy.png'];
 const WAIT_MS = 3000;
 
 self.addEventListener('install', (e) => {
