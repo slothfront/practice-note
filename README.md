@@ -35,7 +35,8 @@
 
 - 部員の画面＝くすみピンク×ワイン（トレーナーの色案C7）、顧問の画面＝ラベンダーグレー×ネイビー（C9）
 - 上の帯に部のロゴ（ボール＋KCVC。`logo-wine.png`・`logo-navy.png`）と一文「HIGHER. STRONGER. QUICKER. TOGETHER.」
-- ホーム画面のアイコン＝白いボール＋KCVC（ワイン地）。英字は Oswald、日本語は Noto Sans JP
+- 背景に部のボールを大きくうすく（`bg-ball-*.png`）と縦の KCVC。カードは少しすかす
+- ホーム画面のアイコン＝白いボール＋KCVC（ワイン地）。見出しの英字と数字は Barlow Condensed（斜体）、ロゴ横は Oswald、日本語は Noto Sans JP
 - 学校名の入ったロゴ（KIMITSU COMMERCIAL HS）は、公開ページなので置いていない
 
 ## ファイル

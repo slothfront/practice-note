@@ -70,7 +70,7 @@ details.lastm>summary{list-style:none;cursor:pointer}.lmhint{white-space:nowrap;
 </style>
 
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=Oswald:wght@500;600;700&family=Noto+Sans+JP:wght@500;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=Oswald:wght@500;600;700&family=Barlow+Condensed:ital,wght@0,700;0,800;1,700;1,800&family=Noto+Sans+JP:wght@500;700;900&display=swap" rel="stylesheet">
 <style>
 body{font-family:"M PLUS Rounded 1c","Hiragino Maru Gothic ProN","Noto Sans JP",sans-serif;background:var(--bg)}
 .en{font-family:"M PLUS Rounded 1c",Arial,sans-serif;font-weight:800;font-style:italic;letter-spacing:.04em}
@@ -175,6 +175,23 @@ nav button.on .badge,nav button.on .tag{background:var(--acc2)!important;color:v
 .tag.wait{background:var(--pale)!important;color:var(--ink2)!important}
 mark.mb{background:linear-gradient(transparent 45%,#FF9AB3 45%)!important}
 .vbar button{background:#13284D!important;border-color:#13284D!important}
+/* 背景に部のボール（うすく大きく）＋縦の KCVC。カードは少しすかして所属感を出す */
+body::before{content:"";position:fixed;z-index:0;pointer-events:none;width:118vw;height:118vw;max-width:760px;max-height:760px;right:-38vw;bottom:-22vw;background:url(bg-ball-wine.png) center/contain no-repeat;opacity:.075;transform:rotate(-14deg)}
+html.is-coach body::before{background-image:url(bg-ball-navy.png)}
+body::after{content:"KCVC";position:fixed;z-index:0;pointer-events:none;left:-6px;top:52%;transform:translateY(-50%) rotate(-90deg);transform-origin:left top;font-family:"Barlow Condensed",sans-serif;font-style:italic;font-weight:800;font-size:110px;letter-spacing:.04em;color:var(--main);opacity:.05;white-space:nowrap}
+main,nav,header,.vbar{position:relative;z-index:1}nav{position:sticky}header{position:sticky}
+.card,.lastm,.notice,.seg,.privnote{background:rgba(255,255,255,.9)!important;backdrop-filter:blur(1.5px)}
+/* 文字：英語の見出しと数字はスポーツ用の斜めの細長い書体 */
+.h .en{font-family:"Barlow Condensed","Oswald",sans-serif!important;font-style:italic!important;font-weight:800!important;font-size:30px!important;letter-spacing:.02em!important;line-height:1.05}
+.h .ja{font-weight:800}
+header .ttl b{font-family:"Barlow Condensed",sans-serif;font-style:italic;font-weight:800;font-size:19px;letter-spacing:.1em}
+header .ttl i{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:10.5px;letter-spacing:.14em}
+.nums b,.tcount .tnum b,.sline,.wbar .wm,.dot,.evt{font-family:"Barlow Condensed","Noto Sans JP",sans-serif}
+.nums b{font-size:22px;font-style:italic}
+.tcount .tnum b{font-size:48px!important;font-style:italic}
+.dot{font-size:19px;font-weight:700}
+.btn{letter-spacing:.24em!important}
+.lastm .date>span:first-child,.notice .date b{font-weight:800}
 </style>
 </head>
 <body>
