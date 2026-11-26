@@ -16,7 +16,7 @@ const PROP_ID = 'PN_SHEET_ID';
 const COLS = {
   members: ['合言葉', 'id', '名前', '役割', '初回', '学年', '最後に開いた'],
   entries: ['id', 'uid', 'date', 'type', 'focus', 'opp', 'n1', 'n2', 'n3', 'n4', 'r1', 'r2', 'r3', 'r4',
-            'good', 'bad', 'heard', 'mgood', 'mbad', 'tgood', 'tbad', 'mprac', 'tocoach', 'next', 'at', 'received', 'star', 'priv'],
+            'good', 'bad', 'heard', 'mgood', 'mbad', 'tgood', 'tbad', 'mprac', 'tocoach', 'next', 'at', 'received', 'star', 'priv', 'what', 'mins', 'memo'],
   replies: ['id', 'entryId', 'text', 'at', 'by', 'byId', 'edited'],
   notices: ['id', 'to', 'text', 'at', 'by', 'byId', 'edited', 'targets'],
   reads: ['noticeId', 'uid', 'at'],
@@ -432,7 +432,7 @@ function clean_(r) {
   return o;
 }
 /** 本人が「自分だけ」にした記録は、顧問には日付・練習／試合・数字だけ渡す（中身はここで消してから送る） */
-const PRIV_TEXT = ['focus', 'opp', 'r1', 'r2', 'r3', 'r4', 'good', 'bad', 'heard', 'mgood', 'mbad', 'tgood', 'tbad', 'mprac', 'tocoach', 'next'];
+const PRIV_TEXT = ['focus', 'opp', 'r1', 'r2', 'r3', 'r4', 'good', 'bad', 'heard', 'mgood', 'mbad', 'tgood', 'tbad', 'mprac', 'tocoach', 'next', 'what', 'memo'];
 function hidePriv_(e) { if (!e.priv) return e; const o = Object.assign({}, e); PRIV_TEXT.forEach(k => o[k] = ''); o.star = false; return o; }
 function cleanR_(r) { return { id: String(r.id), entryId: String(r.entryId), text: String(r.text).replace(/^'/, ''), at: String(r.at), by: String(r.by || '佐藤'), byId: String(r.byId || ''), edited: String(r.edited || '') }; }
 function cleanC_(n) { return { id: String(n.id), uid: String(n.uid), text: String(n.text).replace(/^'/, ''), at: String(n.at), by: String(n.by || ''), byId: String(n.byId || ''), edited: String(n.edited || '') }; }

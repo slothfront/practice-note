@@ -49,6 +49,8 @@ mark.mg,mark.mb{color:inherit;padding:0 2px;border-radius:2px;font-weight:700}ma
 .updbar{position:fixed;left:12px;right:12px;bottom:14px;z-index:50;border:0;border-radius:14px;padding:14px;font:inherit;font-weight:800;font-size:15px;background:#FFE066;color:#1a1a1a;box-shadow:0 4px 14px rgba(0,0,0,.18);cursor:pointer}
 .dseg{margin:2px 0 6px}
 .stash{display:flex;align-items:center;gap:10px;justify-content:space-between;border-left:6px solid var(--acc2);margin-bottom:12px}.stash .rbtns{margin:0;flex:0 0 auto}
+.tag.self{background:#D9F2E6!important;color:#13664A!important}.minrow{display:flex;align-items:center;gap:8px}.minrow input{width:120px;flex:0 0 auto}.minrow span{font-weight:700}
+.wbars{margin-top:8px}.wbar{display:flex;align-items:center;gap:8px;font-size:12px;margin:3px 0}.wbar .wl{flex:0 0 52px;color:var(--gray)}.wbar .wb{flex:1;height:10px;background:var(--soft);border-radius:5px;overflow:hidden}.wbar .wb i{display:block;height:100%;background:#2E9E6E;border-radius:5px}.wbar .wm{flex:0 0 46px;text-align:right}
 .tag.me{background:#E6E6E6!important;color:#444!important}.privnote{background:var(--soft);border-radius:12px;padding:10px 12px;font-size:12.5px;line-height:1.6;margin:14px 0 4px}.btn.ghost2{background:#fff;color:var(--main);border:2px solid var(--main);box-shadow:none;margin-top:10px}
 .nums{display:flex;gap:12px;font-size:12px;margin:6px 0;flex-wrap:wrap}.nums b{color:var(--navy);font-size:14px}
 .kv{font-size:13px;margin:4px 0;line-height:1.5}.kv .k{color:var(--gray);font-size:11px;display:block}
@@ -262,7 +264,7 @@ async function reportReads() {
 }
 const rkey = r => r.edited ? `${r.id}@${r.edited}` : r.id;
 const unseen = () => S.replies.filter(r => !S.seen.includes(rkey(r)));
-const lastNext = (date) => { const e = (!date || date >= today()) ? allEntries()[0] : allEntries().find(x => x.date < date); return e ? e.next || '' : ''; };
+const lastNext = (date) => { const L = allEntries().filter(x => x.type !== 'self'); const e = (!date || date >= today()) ? L[0] : L.find(x => x.date < date); return e ? e.next || '' : ''; };
 /* あとから書いた記録（記入した日が記録の日より後）に小さく「○/○に記入」 */
 const lateMark = e => { if (!e.at) return ''; const w = localDate(e.at); if (!(w > e.date)) return ''; const [, m, d] = w.split('-').map(Number); return ` <span class="mini">（${m}/${d}に記入）</span>`; };
 
@@ -363,13 +365,13 @@ const MQ = [['mgood', 'よかったプレー・できるようになったこと
   ['mbad', 'うまくいかなかったプレー・課題', 'どの場面で、なぜそうなったと思うか'],
   ['tgood', 'チームのよかったところ', ''], ['tbad', 'チームに足りなかったところ', ''],
   ['mprac', '練習で取り組みたいこと', '']];
-const TEXT_KEYS = ['focus', 'good', 'bad', 'heard', 'next', 'r1', 'r2', 'r3', 'r4', 'opp', 'mgood', 'mbad', 'tgood', 'tbad', 'mprac', 'tocoach'];
+const TEXT_KEYS = ['focus', 'good', 'bad', 'heard', 'next', 'r1', 'r2', 'r3', 'r4', 'opp', 'mgood', 'mbad', 'tgood', 'tbad', 'mprac', 'tocoach', 'what', 'mins', 'memo'];
 /* 書きかけ（まだ提出していない記録）に、本人が書いたものがあるか */
 const draftHas = d => !!d && (['n1', 'n2', 'n3', 'n4'].some(k => d[k]) || TEXT_KEYS.some(k => k !== 'focus' && String(d[k] || '').trim()) || (String(d.focus || '').trim() && d.focus !== (d.pre != null ? d.pre : lastNext(d.date))));
 function stashDraft(d) { S.stash = [...(S.stash || []).filter(x => x.date !== d.date), d].sort((a, b) => a.date.localeCompare(b.date)).slice(-5); store.set('stash', S.stash); }
 function blankDraft(date) { const d = { date: date || today(), type: 'practice', n1: 0, n2: 0, n3: 0, n4: 0 }; TEXT_KEYS.forEach(k => { if (!(k in d)) d[k] = ''; }); d.focus = lastNext(d.date); d.pre = d.focus; if (date) d.pick = true; return d; }
 function saveDraft() {
-  if (S.tab !== 'today' || !$('#focus')) return;
+  if (S.tab !== 'today' || !$('#edate')) return;
   const d = S.draft || blankDraft();
   TEXT_KEYS.forEach(k => { const el = $('#' + k); if (el) d[k] = el.value; });
   S.draft = d; store.set('draft', d);
@@ -380,7 +382,7 @@ function renderToday() {
   if (S.draft && !S.draft.pick && S.draft.date < today() && draftHas(S.draft)) { stashDraft(S.draft); S.draft = null; }
   if (!S.draft || (!S.draft.pick && S.draft.date !== today()) || S.draft.date > today()) S.draft = blankDraft();
   const d = S.draft; TEXT_KEYS.forEach(k => { if (d[k] == null) d[k] = ''; }); if (!d.type) d.type = 'practice';
-  const M = d.type === 'match';
+  const M = d.type === 'match', SELF = d.type === 'self';
   const past = d.date < today();
   const done = allEntries().filter(e => e.date === d.date).length;
   const nums = (M ? FM : F).map(([n, l, r]) => `<div class="row" data-row="${n}"><span class="lab">${l}</span>${[1, 2, 3, 4, 5].map(i => `<button class="dot ${d[n] === i ? 'on' : ''}" data-n="${n}" data-v="${i}" aria-label="${l} ${i}">${i}</button>`).join('')}</div>` +
@@ -402,8 +404,14 @@ function renderToday() {
   ${(S.stash || []).map((x, i) => `<div class="card stash"><div><b>${jdate(x.date)}の書きかけがあります</b><div class="mini">まだ提出していません${x.focus && x.focus !== x.pre ? `　FOCUS：${esc(String(x.focus).slice(0, 24))}` : ''}</div></div><div class="rbtns"><button class="mini-btn save" data-stgo="${i}">続きを書く</button><button class="mini-btn cancel" data-stdel="${i}">捨てる</button></div></div>`).join('')}
   <div class="h" style="margin-top:4px"><span class="en">DATE</span><span class="ja">記録する日</span></div><div class="hint">書き忘れた日は、日付を変えるとあとから書けます</div>
   <div class="card dpick ${past ? 'past' : ''}"><input type="date" id="edate" value="${d.date}" max="${today()}"><span class="dlab">${past ? `${jdate(d.date)}の記録` : '今日の記録'}</span>${past ? '<button class="link" id="dtoday">今日にもどす</button>' : ''}</div>
-  ${done ? `<div class="mini">${past ? 'この日' : '今日'}はもう${done}回提出しています。もう一度出すと、もう1件追加されます</div>` : ''}
-  <div class="seg"><button data-type="practice" class="${M ? '' : 'on'}">練習</button><button data-type="match" class="${M ? 'on' : ''}">試合</button></div>
+  ${done && !SELF ? `<div class="mini">${past ? 'この日' : '今日'}はもう${done}回提出しています。もう一度出すと、もう1件追加されます</div>` : ''}
+  <div class="seg"><button data-type="practice" class="${d.type === 'practice' ? 'on' : ''}">練習</button><button data-type="match" class="${M ? 'on' : ''}">試合</button><button data-type="self" class="${SELF ? 'on' : ''}">自主練</button></div>
+  ${SELF ? `<div class="h"><span class="en">SELF</span><span class="ja">自主練でやったこと</span></div><div class="hint">例：体幹トレーニング、壁打ち、ランニング、サーブ練習</div>
+  <textarea id="what" placeholder="やったこと">${esc(d.what)}</textarea>
+  <div class="h"><span class="en">TIME</span><span class="ja">時間</span></div>
+  <div class="minrow"><input id="mins" type="number" inputmode="numeric" min="1" max="600" placeholder="30" value="${esc(d.mins)}"><span>分</span></div>
+  <div class="h"><span class="en">NOTE</span><span class="ja">気づいたこと</span></div><div class="hint">書けるものだけでOK</div>
+  <textarea id="memo" placeholder="やってみて気づいたこと">${esc(d.memo)}</textarea>` : `
   <div class="h"><span class="en">${past ? 'FOCUS' : "TODAY'S FOCUS"}</span><span class="ja">${past ? 'この日意識したこと' : '今日意識すること'}</span></div><div class="hint">前回のNEXTが入っています。変えてもよい</div>
   <textarea id="focus" class="${d.focus && d.focus === lastNext(d.date) ? 'prefill' : ''}" placeholder="${past ? 'この日意識したこと' : '今日意識すること'}">${esc(d.focus)}</textarea>
   ${M ? `<div class="h"><span class="en">MATCH</span><span class="ja">試合</span></div><div class="hint">相手と結果。例：令徳 1-2、木更津東 2-0</div>
@@ -414,8 +422,8 @@ function renderToday() {
   <div class="h"><span class="en">NEXT</span><span class="ja">次にどうする</span></div><div class="hint">1つだけ。次の「今日意識すること」になる</div>
   <textarea id="next" placeholder="次にやること">${esc(d.next)}</textarea>
   ${M ? `<div class="h"><span class="en">TO COACH</span><span class="ja">顧問に伝えたいこと</span></div><div class="hint">あれば</div>
-  <textarea id="tocoach">${esc(d.tocoach)}</textarea>` : ''}
-  ${privOK() ? `<div class="privnote">「自分だけに残す」にすると、顧問に届くのは<b>日付と数字</b>（意識できた・体の調子・気持ち${M ? '・出来' : ''}）だけです。書いた中身は記録の表には残りますが、顧問のアプリには出ません。あとから「顧問に見せる」にもできます。</div>` : ''}
+  <textarea id="tocoach">${esc(d.tocoach)}</textarea>` : ''}`}
+  ${privOK() ? `<div class="privnote">「自分だけに残す」にすると、顧問に届くのは<b>${SELF ? '日付と時間' : '日付と数字'}</b>${SELF ? '' : `（意識できた・体の調子・気持ち${M ? '・出来' : ''}）`}だけです。書いた中身は記録の表には残りますが、顧問のアプリには出ません。あとから「顧問に見せる」にもできます。</div>` : ''}
   <button class="btn" id="submit" ${S.viewAs ? 'disabled' : ''}>${S.viewAs ? '提出（見るだけの画面では押せません）' : privOK() ? '顧問に見せる' : '提出'}</button>
   ${privOK() ? `<button class="btn ghost2" id="submitMe" ${S.viewAs ? 'disabled' : ''}>自分だけに残す</button>` : ''}
   <p class="mini center">電波が無いときは、つながったときに自動で送ります</p>`);
@@ -445,11 +453,30 @@ function renderToday() {
     S.stash = S.stash.filter(y => y !== x); store.set('stash', S.stash); renderToday();
   });
 }
+/* 自主練：やったこと・時間（分）は必ず、気づきは書けるだけ */
+async function submitSelf(d, priv) {
+  const miss = []; const mins = Math.round(Number(String(d.mins || '').normalize('NFKC')));
+  if (!String(d.what || '').trim()) miss.push('#what');
+  if (!(mins > 0 && mins <= 600)) miss.push('#mins');
+  if (d.date > today()) { toast('先の日付には書けません'); return; }
+  if (miss.length) {
+    miss.forEach(q => { const el = $(q); if (el) el.classList.add('miss'); });
+    const first = $(miss[0]); if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    toast(miss.includes('#mins') && miss.length === 1 ? '時間を分で入れてください（例：30）' : `まだ書いていないところが${miss.length}か所あります（黄色のところ）`); return;
+  }
+  const e = { id: uid(), date: d.date, type: 'self', what: d.what.trim(), mins: String(mins), memo: String(d.memo || '').trim(), focus: '', next: '', n1: 0, n2: 0, n3: 0, at: new Date().toISOString(), priv };
+  S.outbox.push(e); S.draft = null; store.del('draft'); save();
+  $('#submit').disabled = true;
+  await flush();
+  toast(S.outbox.some(x => x.id === e.id) ? '保存しました。ネットにつながったら送ります' : priv ? '自分だけに残しました（顧問には日付と時間だけ届きます）' : '自主練を記録しました');
+  S.tab = 'history'; render(); window.scrollTo(0, 0);
+}
 async function submit(priv) {
   if (S.viewAs) { toast('見るだけの画面です。提出はできません'); return; }
   priv = !!priv && privOK();
   saveDraft(); const d = S.draft; const miss = []; const M = d.type === 'match';
   document.querySelectorAll('.miss').forEach(x => x.classList.remove('miss'));
+  if (d.type === 'self') return submitSelf(d, priv);
   /* 自分だけに残すときは、数字だけあればよい（ことばは書けるだけ） */
   if (!priv && !d.focus.trim()) miss.push('#focus');
   if (!priv && M && !d.opp.trim()) miss.push('#opp');
@@ -490,8 +517,8 @@ function privHTML(e, o) {
   const M = e.type === 'match';
   return `<div class="card ${o.coach && isLow(e) ? 'low' : ''}" data-id="${e.id}">
     <div class="date"><span>${o.who ? `${esc(o.who)}　` : ''}${jdate(e.date)}${M ? ' <span class="tag match">MATCH</span>' : ''}${lateMark(e)}</span><span>${privTag}</span></div>
-    <div class="nums">意識できた <b>${e.n1}</b>　体の調子 <b>${e.n2}</b>　気持ち <b>${e.n3}</b>${M ? `　出来 <b>${e.n4}</b>` : ''}</div>
-    <div class="mini" style="margin-top:4px">記録しました。中身は本人のアプリだけに出ます（顧問の画面に届くのは日付と数字だけ）</div></div>`;
+    ${e.type === 'self' ? `<div class="nums"><span class="tag self">自主練</span>　時間 <b>${esc(e.mins)}</b>分</div>` : `<div class="nums">意識できた <b>${e.n1}</b>　体の調子 <b>${e.n2}</b>　気持ち <b>${e.n3}</b>${M ? `　出来 <b>${e.n4}</b>` : ''}</div>`}
+    <div class="mini" style="margin-top:4px">記録しました。中身は本人のアプリだけに出ます（顧問の画面に届くのは${e.type === 'self' ? '日付と時間' : '日付と数字'}だけ）</div></div>`;
 }
 function entryHTML(e, o) {
   if (e.priv && (o.coach || S.viewAs)) return privHTML(e, o);
@@ -504,17 +531,20 @@ function entryHTML(e, o) {
       ${M ? MQ.map(([k, q]) => e[k] ? `<div class="kv"><span class="k">${q}</span>${esc(e[k])}</div>` : '').join('') : ''}`;
   const toc = e.tocoach ? `<div class="kv tocoach"><span class="k">顧問に伝えたいこと</span>${esc(e.tocoach)}</div>` : '';
   return `<div class="card ${o.coach && isLow(e) ? 'low' : ''} ${o.open ? 'open' : ''}" data-id="${e.id}">
-    <div class="date"><span>${o.who ? `${esc(o.who)}　` : ''}${jdate(e.date)}${M ? ' <span class="tag match">MATCH</span>' : ''}${lateMark(e)}</span><span>${e.priv ? privTag : ''}${o.tag || ''}${o.coach || e._wait ? '' : starBtn(e)}</span></div>
+    <div class="date"><span>${o.who ? `${esc(o.who)}　` : ''}${jdate(e.date)}${M ? ' <span class="tag match">MATCH</span>' : ''}${e.type === 'self' ? ' <span class="tag self">自主練</span>' : ''}${lateMark(e)}</span><span>${e.priv ? privTag : ''}${o.tag || ''}${o.coach || e._wait ? '' : starBtn(e)}</span></div>
+    ${e.type === 'self' ? `<div class="kv"><span class="k">SELF　やったこと</span>${esc(e.what)}</div>
+    <div class="nums">時間 <b>${esc(e.mins)}</b>分</div>
+    ${e.memo ? `<div class="kv"><span class="k">NOTE　気づいたこと</span>${esc(e.memo)}</div>` : ''}` : `
     <div class="kv"><span class="k">FOCUS　今日意識すること</span>${esc(e.focus)}</div>
     ${M ? `<div class="kv"><span class="k">MATCH　相手と結果</span>${esc(e.opp)}</div>` : ''}
     <div class="nums">意識できた <b>${e.n1}</b>　体の調子 <b>${e.n2}</b>　気持ち <b>${e.n3}</b>${M ? `　出来 <b>${e.n4}</b>` : ''}</div>
     ${o.coach ? reasons + toc : ''}
     <div class="more">${o.coach ? '' : reasons}${detail}${o.coach ? '' : toc}</div>
-    <div class="kv"><span class="k">NEXT　次にどうする</span>${esc(e.next)}</div>
+    <div class="kv"><span class="k">NEXT　次にどうする</span>${esc(e.next)}</div>`}
     ${rs.map(r => replyHTML(r, o.coach)).join('') || (e._wait || o.coach || e.priv ? '' : '<div class="mini" style="margin-top:6px">（返事はまだ）</div>')}
-    ${e.priv && !o.coach ? `<div class="rbtns" style="margin-top:8px"><span class="mini" style="flex:1">顧問の画面には日付と数字だけ出ています</span><button class="mini-btn save shareb" data-share="${e.id}">顧問に見せる</button></div>` : ''}
+    ${e.priv && !o.coach ? `<div class="rbtns" style="margin-top:8px"><span class="mini" style="flex:1">顧問の画面には${e.type === 'self' ? '日付と時間' : '日付と数字'}だけ出ています</span><button class="mini-btn save shareb" data-share="${e.id}">顧問に見せる</button></div>` : ''}
     ${o.coach ? `<div class="q">${rs.length ? 'もう一言' : `COACH　${esc(S.name)}から`}</div><textarea class="rep" id="rep_${e.id}" placeholder="一言">${esc(S.repDraft[e.id] || '')}</textarea><button class="btn send" data-id="${e.id}" style="margin-top:8px;padding:11px">返事を送る</button>` : ''}
-    <button class="toggle">${o.open ? '閉じる' : '全部の中身を見る'}</button></div>`;
+    ${e.type === 'self' ? '' : `<button class="toggle">${o.open ? '閉じる' : '全部の中身を見る'}</button>`}</div>`;
 }
 function bindCards() {
   document.querySelectorAll('.toggle').forEach(b => b.onclick = () => { const c = b.closest('.card'); c.classList.toggle('open'); b.textContent = c.classList.contains('open') ? '閉じる' : '全部の中身を見る'; });
@@ -522,7 +552,7 @@ function bindCards() {
 /* ---- これまで：全部／気づき・検索・☆ ---- */
 const starBtn = e => `<button class="starb ${e.star ? 'on' : ''}" data-star="${e.id}" aria-label="☆">${e.star ? '★' : '☆'}</button>`;
 /* 自分で考えたこと・気づいたことの欄 */
-const INS = [['heard', '言われたこと・気づいたこと'], ['bad', 'うまくいかなかった・なぜ'], ['mbad', '課題（どの場面で・なぜ）'], ['tbad', 'チームに足りなかったところ'], ['mprac', '練習で取り組みたいこと'], ['next', 'NEXT　次にどうする']];
+const INS = [['memo', '自主練で気づいたこと'], ['heard', '言われたこと・気づいたこと'], ['bad', 'うまくいかなかった・なぜ'], ['mbad', '課題（どの場面で・なぜ）'], ['tbad', 'チームに足りなかったところ'], ['mprac', '練習で取り組みたいこと'], ['next', 'NEXT　次にどうする']];
 const hl = t => { const q = S.hq.trim(); const x = esc(t); if (!q) return x; const qq = esc(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); return x.replace(new RegExp(qq, 'gi'), m => `<mark>${m}</mark>`); };
 const hasQ = t => { const q = S.hq.trim().toLowerCase(); return !q || String(t || '').toLowerCase().includes(q); };
 const entryText = e => [...TEXT_KEYS.map(k => e[k] || ''), ...repliesFor(e.id).map(r => r.text)].join('\n');
@@ -714,8 +744,20 @@ function renderMember() {
   bindCards(); bindReplies();
 }
 
+/* 自主練の時間：今週・今月と、ここ6週間の週ごとの合計 */
+function selfBlock() {
+  const es = allEntries().filter(e => e.type === 'self'); if (!es.length) return '';
+  const t = today(); const [ty, tm, td] = t.split('-').map(Number); const dow = (new Date(ty, tm - 1, td).getDay() + 6) % 7; const mon = addDays(t, -dow);
+  const sum = list => list.reduce((a, e) => a + (Number(e.mins) || 0), 0);
+  const wk = es.filter(e => e.date >= mon && e.date <= t), mo = es.filter(e => e.date.slice(0, 7) === t.slice(0, 7));
+  const weeks = []; for (let i = 5; i >= 0; i--) { const a = addDays(mon, -7 * i), b = addDays(a, 6); weeks.push([a, sum(es.filter(e => e.date >= a && e.date <= b))]); }
+  const mx = Math.max(30, ...weeks.map(w => w[1]));
+  return `<div class="h"><span class="en">SELF</span><span class="ja">自主練の時間</span></div>
+    <div class="card"><div class="sline"><b>今週</b>${sum(wk)}分（${wk.length}回）</div><div class="sline"><b>今月</b>${sum(mo)}分（${mo.length}回）</div>
+    <div class="wbars">${weeks.map(([a, m]) => `<div class="wbar"><span class="wl">${Number(a.slice(5, 7))}/${Number(a.slice(8))}〜</span><span class="wb"><i style="width:${Math.round(m / mx * 100)}%"></i></span><span class="wm">${m}分</span></div>`).join('')}</div></div>`;
+}
 function renderGraph() {
-  const L = allEntries().slice(0, 14).reverse();
+  const L = allEntries().filter(e => e.type !== 'self').slice(0, 14).reverse();
   let svg = '<p class="mini center" style="margin-top:30px">記録が2回以上たまると、グラフが出ます</p>';
   if (L.length >= 2) {
     const W = 320, Hh = 190, x0 = 36, x1 = 296, y = v => 170 - v * 30, x = i => x0 + (x1 - x0) * (L.length === 1 ? 0.5 : i / (L.length - 1));
@@ -728,7 +770,7 @@ function renderGraph() {
     </svg><div class="legend"><span><i style="--c:#1F4E79"></i>意識できた</span><span><i class="d" style="--c:#2E75B6"></i>体の調子（破線）</span><span><i style="--c:#FFC000"></i>気持ち</span></div></div>`;
   }
   const low = allEntries().filter(e => fieldsOf(e).some(([n, , r]) => e[n] <= 2 && e[r])).slice(0, 5);
-  shell(S.name, `<div class="h" style="margin-top:4px"><span class="en">TREND</span><span class="ja">数字の推移</span></div><div class="hint">最近14回まで</div>${svg}
+  shell(S.name, `${selfBlock()}<div class="h" style="margin-top:4px"><span class="en">TREND</span><span class="ja">数字の推移</span></div><div class="hint">最近14回まで</div>${svg}
   ${jumpSection(S.jumps, S.me)}
   ${low.length ? `<div class="h"><span class="en">LOW</span><span class="ja">1・2を付けた日</span></div>${low.map(e => `<div class="card" style="margin-bottom:8px"><div class="date">${jdate(e.date)}</div>${fieldsOf(e).filter(([n, , r]) => e[n] <= 2 && e[r]).map(([n, l, r]) => `<div class="kv"><span class="k">${l} ${e[n]}</span>${esc(e[r])}</div>`).join('')}</div>`).join('')}` : ''}`);
 }
