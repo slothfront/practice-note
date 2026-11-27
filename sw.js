@@ -1,12 +1,11 @@
 // PRACTICE NOTE：ネットが無くても開けるようにする仕組み（サービスワーカー）
-// - ページ本体：ネットがあれば最新を取りに行き、無い・遅いときは前回の控えを出す
+// - ページ本体：前回の控えがあればすぐに出し、最新は裏で取りに行く（控えが無いときだけネットを待つ）
 // - アイコン・manifest：控えを先に出す
 // - 字（Google Fonts）：一度読めたものは控えておく
 // 記録（localStorage）と、GASへの送受信には触らない。
 const CACHE = 'pnote-v2';
 const PAGE = './';
 const PRECACHE = ['./', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'favicon-32.png', 'bg-ball-wine.png', 'bg-ball-navy.png', 'plate-wine.png', 'plate-navy.png'];
-const WAIT_MS = 3000;
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
@@ -24,14 +23,12 @@ self.addEventListener('activate', (e) => {
   );
 });
 
+// 最新のページを取りに行き、取れたら控えを入れ替える（時間を区切らない＝電波が弱くても最後まで取る）
 function pageFromNetwork(req) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('timeout')), WAIT_MS);
-    fetch(req, { cache: 'no-cache' }).then((res) => {
-      clearTimeout(timer);
-      if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(PAGE, copy)); }
-      resolve(res);
-    }, (err) => { clearTimeout(timer); reject(err); });
+  return fetch(req, { cache: 'no-cache' }).then((res) => {
+    if (!res.ok) return res;
+    const copy = res.clone();
+    return caches.open(CACHE).then((c) => c.put(PAGE, copy)).then(() => res, () => res);
   });
 }
 
@@ -40,10 +37,14 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
+  // ページ本体：前に開いた控えがあれば、それをすぐに出す（電波が弱くても真っ白で待たない）。
+  // 新しい版は裏で取りに行って控えを入れ替える。入れ替わったことは index.html の「新しい版を見つけて入れ替える」が気づいて読み込み直す
   if (req.mode === 'navigate' && url.origin === location.origin) {
+    const fresh = pageFromNetwork(req);
+    e.waitUntil(fresh.catch(() => {}));
     e.respondWith(
-      pageFromNetwork(req).catch(() =>
-        caches.match(PAGE).then((hit) => hit || caches.match(req, { ignoreSearch: true }))
+      caches.match(PAGE).then((hit) => hit || fresh).catch(() =>
+        caches.match(req, { ignoreSearch: true })
           .then((hit) => hit || new Response(
             '<meta charset="utf-8"><p style="font:16px sans-serif;padding:24px">一度ネットにつないで開いてください。</p>',
             { headers: { 'Content-Type': 'text/html; charset=utf-8' } }))
