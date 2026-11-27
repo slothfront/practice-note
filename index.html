@@ -213,7 +213,33 @@ header .t:after{content:none!important}
 </style>
 </head>
 <body>
-<div id="app"><div style="padding:38vh 16px 0;text-align:center;color:#8a7a80;font:15px sans-serif">読み込み中…<div style="font-size:12px;margin-top:8px">電波が弱いと少し時間がかかります</div></div></div>
+<div id="app"><div id="boot" style="padding:38vh 16px 0;text-align:center;color:#8a7a80;font:15px sans-serif">読み込み中…<div style="font-size:12px;margin-top:8px">電波が弱いと少し時間がかかります</div></div></div>
+<script id="guard">
+/* 開けなかったときの見張り：画面を描く前に止まったら、理由と「読み込み直す」を出す（記録＝端末の中身は消さない） */
+(function () {
+  function box(why) {
+    var b = document.getElementById('boot'); if (!b) return;
+    b.style.paddingTop = '22vh';
+    b.innerHTML = '<div style="font-size:16px;color:#5A1A2E;font-weight:700">うまく開けませんでした</div>' +
+      (why ? '<div style="margin:10px auto 0;max-width:340px;font-size:11px;color:#8a7a80;word-break:break-all;text-align:left;background:#fff;border-radius:8px;padding:8px">' + String(why).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }) + '</div>' : '') +
+      '<button id="g1" style="display:block;margin:18px auto 0;padding:12px 18px;border:0;border-radius:10px;background:#5A1A2E;color:#fff;font-size:15px">読み込み直す</button>' +
+      '<button id="g2" style="display:block;margin:10px auto 0;padding:10px 14px;border:1px solid #c9a9b1;border-radius:10px;background:#fff;color:#5A1A2E;font-size:13px">控えを消して読み込み直す（書いた記録は消えません）</button>' +
+      '<div style="margin-top:12px;font-size:11px;color:#8a7a80">直らないときは、この画面のスクリーンショットを顧問へ</div>';
+    document.getElementById('g1').onclick = function () { location.reload(); };
+    document.getElementById('g2').onclick = function () { window.__pnReset(); };
+  }
+  window.__pnReset = function () {
+    try { history.replaceState(null, ''); } catch (e) {}
+    try { sessionStorage.clear(); } catch (e) {}
+    var a = window.caches ? caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }) : Promise.resolve();
+    var b = navigator.serviceWorker ? navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); }) : Promise.resolve();
+    Promise.all([a.catch(function () {}), b.catch(function () {})]).then(function () { location.replace('./?r=' + Date.now()); });
+  };
+  window.__pnErr = function (err) { var st = (err && err.stack ? String(err.stack).split('\n').slice(0, 3).join(' / ') : String(err && err.message || err)); box(st); };
+  window.addEventListener('error', function (e) { if (e.error || e.message) box((e.message || '') + (e.lineno ? '（' + e.lineno + '行）' : '') + (e.error && e.error.stack ? ' / ' + String(e.error.stack).split('\n').slice(1, 3).join(' / ') : '')); });
+  setTimeout(function () { box('15秒たっても開けませんでした（電波が弱いか、途中で止まっています）'); }, 15000);
+})();
+</script>
 <script>
 'use strict';
 /* ===== 設定 =====
@@ -312,7 +338,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&a
 const pad = n => String(n).padStart(2, '0');
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 const WD = ['日', '月', '火', '水', '木', '金', '土'];
-const jdate = s => { const [y, m, d] = s.split('-').map(Number); const w = WD[new Date(y, m - 1, d).getDay()]; return `${m}月${d}日（${w}）`; };
+const jdate = s => { if (!s) return '（日付なし）'; const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); const w = WD[new Date(y, m - 1, d).getDay()]; return `${m}月${d}日（${w}）`; };
 /* 「今日 9:34」「11/24（月）21:05」 */
 const whenText = iso => { const d = new Date(iso); if (isNaN(d)) return '—'; const hm = `${d.getHours()}:${pad(d.getMinutes())}`; const ld = localDate(iso); return ld === today() ? `今日 ${hm}` : `${Number(ld.slice(5, 7))}/${Number(ld.slice(8))}（${WD[d.getDay()]}）${hm}`; };
 const localDate = iso => { const d = new Date(iso); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
@@ -1266,9 +1292,15 @@ if (S.key && !S.needSet && st0 && st0.pn) {
 }
 try { history.replaceState(navState(), ''); } catch (e) {}
 window.addEventListener('pagehide', () => { try { history.replaceState(Object.assign(navState(), { y: window.scrollY }), ''); } catch (e) {} });
-render();
+try { render(); } catch (err) {
+  /* 前に開いていた画面（タブ・部員の画面で見る など）が原因のときに備え、最初の画面で開き直す */
+  console.error(err);
+  try { if (S.viewAs) exitView(); } catch (e) {}
+  S.viewAs = null; S.member = null; S.cview = null; S.tab = S.role === 'coach' ? 'new' : 'today';
+  try { history.replaceState(navState(), ''); render(); } catch (err2) { console.error(err2); if (window.__pnErr) window.__pnErr(err2); }
+}
 if (st0 && st0.y) requestAnimationFrame(() => window.scrollTo(0, st0.y));
-if (S.key && S.role === 'coach') refresh().then(ok => { if (ok) render(); });
+if (S.key && S.role === 'coach') refresh().then(ok => { if (ok) render(); }).catch(e => { console.error(e); toast('うまく表示できませんでした：' + (e && e.message)); });
 else if (S.key) refresh().then(ok => { if (!ok) return; const n = unseen().length, m = unseenN().length; if (S.tab !== 'today' || m) render(); if (n) toast(`顧問からの返事が${n}件あります`); });
 </script>
 <script>
@@ -1280,7 +1312,7 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
  * 開いた直後（まだ触っていない）なら自動で読み込み直す。触ったあとなら「新しい版があります」を出す。
  * 電波が無くても開ける仕組み（sw.js）の控えも新しい版に差しかえておく */
 (function () {
-  const self = (document.querySelector('script:not([src])') || {}).textContent || '';
+  const self = (document.querySelector('script:not([src]):not(#guard)') || {}).textContent || '';
   const born = Date.now(); let touched = false, last = 0, shown = false;
   ['pointerdown', 'keydown', 'input'].forEach(t => window.addEventListener(t, () => { touched = true; }, { capture: true }));
   async function check() {
