@@ -142,6 +142,10 @@ mark{background:#FFE27A;color:inherit;padding:0 1px;border-radius:3px}
 details.mrep{margin-bottom:10px}details.mrep>summary{list-style:none;cursor:pointer}
 details.mrep>summary::-webkit-details-marker{display:none}
 .mapr{display:flex;align-items:center;gap:8px;margin:6px 0}.mapr span{width:96px;font-size:13px;font-weight:700}.mapr select{flex:1}
+/* 仲間のGOOD */
+.good{border-left:6px solid var(--acc2)!important}.good .gtext{white-space:pre-wrap;margin-top:4px}
+.pgrow{background:rgba(255,255,255,.7);border-radius:14px;padding:8px;margin-bottom:8px}.pgrow select{margin-bottom:6px}.pgrow textarea{min-height:56px}
+.kline{font-size:13px;margin-top:6px;padding:6px 8px;border-radius:10px;background:rgba(0,0,0,.035)}.kline b{font-weight:700}
 select{width:100%;border:2px solid var(--line2,#d0d7e1);border-radius:14px;padding:10px;font:inherit;font-size:16px;background:#fff}
 </style>
 <style>
@@ -328,9 +332,10 @@ const S = {
   cd: store.get('cd', { members: [], entries: [], replies: [] }), reports: store.get('reports', []), jumps: store.get('jumps', []), readN: store.get('readN', []), feat: store.get('feat', []), stash: store.get('stash', []), sched: store.get('sched', []), seenRep: store.get('seenRep', []), imp: null, member: null, showAll: false, repDraft: {},
   entries: store.get('entries', []), replies: store.get('replies', []),
   outbox: store.get('outbox', []), seen: store.get('seen', []),
+  mates: store.get('mates', []), kudos: store.get('kudos', []), kudosSent: store.get('kudosSent', []), seenK: store.get('seenK', []),
   tab: 'today', draft: store.get('draft', null), justSeen: [], hmode: store.get('hmode', 'all'), hq: '', starOnly: false
 };
-const save = () => { store.set('reports', S.reports); store.set('seenRep', S.seenRep); store.set('notices', S.notices); store.set('seenN', S.seenN); store.set('reportedN', S.reportedN); store.set('entries', S.entries); store.set('replies', S.replies); store.set('outbox', S.outbox); store.set('seen', S.seen); };
+const save = () => { store.set('reports', S.reports); store.set('seenRep', S.seenRep); store.set('notices', S.notices); store.set('seenN', S.seenN); store.set('reportedN', S.reportedN); store.set('entries', S.entries); store.set('replies', S.replies); store.set('outbox', S.outbox); store.set('seen', S.seen); store.set('mates', S.mates); store.set('kudos', S.kudos); store.set('kudosSent', S.kudosSent); store.set('seenK', S.seenK); };
 
 /* ===== 道具 ===== */
 const $ = s => document.querySelector(s);
@@ -370,7 +375,7 @@ async function flush() {
     catch (err) { if (err.server) { /* 受け口が断った */ } break; }
   }
 }
-const clearLocal = () => ['key', 'name', 'role', 'needSet', 'me', 'entries', 'replies', 'outbox', 'seen', 'draft', 'cd', 'notices', 'seenN', 'reportedN', 'reports', 'seenRep', 'jumps', 'readN', 'stash', 'sched', 'feat', 'cdLast', 'lmShut'].forEach(k => store.del(k));
+const clearLocal = () => ['key', 'name', 'role', 'needSet', 'me', 'entries', 'replies', 'outbox', 'seen', 'draft', 'cd', 'notices', 'seenN', 'reportedN', 'reports', 'seenRep', 'jumps', 'readN', 'stash', 'sched', 'feat', 'cdLast', 'lmShut', 'mates', 'kudos', 'kudosSent', 'seenK'].forEach(k => store.del(k));
 function forgetIfBadKey(e) {
   if (e && e.server && /先に自分の合言葉/.test(e.message || '')) { S.needSet = true; store.set('needSet', true); render(); return; }
   if (e && e.server && /合言葉/.test(e.message || '')) { clearLocal(); location.reload(); }
@@ -378,12 +383,12 @@ function forgetIfBadKey(e) {
 async function refresh() {
   if (S.viewAs) return true;
   if (S.role === 'coach') {
-    try { const j = await api('coachList', { key: S.key }); S.sched = j.schedule || []; store.set('sched', S.sched); S.cd = { schedule: j.schedule || [], members: j.members, entries: j.entries, replies: j.replies, notices: j.notices || [], reads: j.reads || [], reports: parseReports(j.reports), jumps: j.jumps || [], coaches: j.coaches || [], cnotes: j.cnotes || [], creads: j.creads || [] }; if (j.me) { S.me = j.me; store.set('me', S.me); } store.set('cd', S.cd); return true; } catch (e) { forgetIfBadKey(e); return false; }
+    try { const j = await api('coachList', { key: S.key }); S.sched = j.schedule || []; store.set('sched', S.sched); S.cd = { schedule: j.schedule || [], members: j.members, entries: j.entries, replies: j.replies, notices: j.notices || [], reads: j.reads || [], reports: parseReports(j.reports), jumps: j.jumps || [], coaches: j.coaches || [], cnotes: j.cnotes || [], creads: j.creads || [], kudos: j.kudos || [] }; if (j.feat) { S.feat = j.feat; store.set('feat', S.feat); } if (j.me) { S.me = j.me; store.set('me', S.me); } store.set('cd', S.cd); return true; } catch (e) { forgetIfBadKey(e); return false; }
   }
   try {
     await flush();
     const j = await api('list', { key: S.key });
-    S.feat = j.feat || []; store.set('feat', S.feat); S.sched = j.schedule || []; store.set('sched', S.sched); S.entries = (j.entries || []).map(e => Object.assign(e, { star: e.star === true || e.star === '1' || e.star === 1, priv: e.priv === true || e.priv === '1' })); S.replies = j.replies; S.notices = j.notices || []; S.readN = j.readN || []; store.set('readN', S.readN); S.reports = parseReports(j.reports); S.jumps = j.jumps || []; store.set('jumps', S.jumps); if (j.name) { S.name = j.name; store.set('name', j.name); }
+    S.feat = j.feat || []; store.set('feat', S.feat); S.mates = j.mates || []; S.kudos = j.kudos || []; S.kudosSent = j.kudosSent || []; S.sched = j.schedule || []; store.set('sched', S.sched); S.entries = (j.entries || []).map(e => Object.assign(e, { star: e.star === true || e.star === '1' || e.star === 1, priv: e.priv === true || e.priv === '1' })); S.replies = j.replies; S.notices = j.notices || []; S.readN = j.readN || []; store.set('readN', S.readN); S.reports = parseReports(j.reports); S.jumps = j.jumps || []; store.set('jumps', S.jumps); if (j.name) { S.name = j.name; store.set('name', j.name); }
     save(); return true;
   } catch (e) { forgetIfBadKey(e); return false; }
 }
@@ -469,6 +474,7 @@ function saveDraft() {
   if (S.tab !== 'today' || !$('#edate')) return;
   const d = S.draft || blankDraft();
   TEXT_KEYS.forEach(k => { const el = $('#' + k); if (el) d[k] = el.value; });
+  const rows = document.querySelectorAll('.pgrow'); if (rows.length) d.pg = [...rows].map(r => ({ to: r.querySelector('.pgto').value, text: r.querySelector('.pgtx').value }));
   S.draft = d; store.set('draft', d);
 }
 function renderToday() {
@@ -493,6 +499,7 @@ function renderToday() {
   const noticeBlock = nNew.length ? `<button class="notice fresh" id="toN" style="width:100%;text-align:left;font:inherit;cursor:pointer"><div class="date"><span>顧問からのお知らせ　未読 <b>${nNew.length}件</b></span><span class="tag">未読</span></div><div class="mini">押すとお知らせのタブを開きます</div></button>` : '';
   shell(`${jdate(today())}　${S.name}`, `
   ${noticeBlock}
+  ${goodInbox()}
   ${schedSoon()}
   ${lastMatchCard()}
   ${S.outbox.length ? `<div class="pending">送信待ち ${S.outbox.length}件。ネットにつながったら自動で送ります</div>` : ''}
@@ -517,7 +524,8 @@ function renderToday() {
   <div class="h"><span class="en">NEXT</span><span class="ja">次にどうする</span></div><div class="hint">1つだけ。次の「今日意識すること」になる</div>
   <textarea id="next" placeholder="次にやること">${esc(d.next)}</textarea>
   ${M ? `<div class="h"><span class="en">TO COACH</span><span class="ja">顧問に伝えたいこと</span></div><div class="hint">あれば</div>
-  <textarea id="tocoach">${esc(d.tocoach)}</textarea>` : ''}`}
+  <textarea id="tocoach">${esc(d.tocoach)}</textarea>` : ''}
+  ${goodForm(d)}`}
   ${privOK() ? `<div class="privnote">「自分だけに残す」にすると、顧問に届くのは<b>${SELF ? '日付と時間' : '日付と数字'}</b>${SELF ? '' : `（意識できた・体の調子・気持ち${M ? '・出来' : ''}）`}だけです。書いた中身は記録の表には残りますが、顧問のアプリには出ません。あとから「顧問に見せる」にもできます。</div>` : ''}
   <button class="btn" id="submit" ${S.viewAs ? 'disabled' : ''}>${S.viewAs ? '提出（見るだけの画面では押せません）' : privOK() ? '顧問に見せる' : '提出'}</button>
   ${privOK() ? `<button class="btn ghost2" id="submitMe" ${S.viewAs ? 'disabled' : ''}>自分だけに残す</button>` : ''}
@@ -539,6 +547,10 @@ function renderToday() {
   const lm = $('#lastm'); if (lm) lm.addEventListener('toggle', () => { const r = myReports()[0]; if (!r) return; store.set('lmShut', lm.open ? '' : rkeyRep(r)); const h = lm.querySelector('.lmhint'); if (h) h.textContent = lm.open ? '▲ 閉じる' : '▼ 開く'; });
   const tn = $('#toN'); if (tn) tn.onclick = () => go('snotice');
   const ts = $('#toSched'); if (ts) ts.onclick = () => go('sched');
+  const pa = $('#pgadd'); if (pa) pa.onclick = () => { saveDraft(); d.pg = [...pgOf(d), { to: '', text: '' }].slice(0, 3); store.set('draft', d); renderToday(); };
+  document.querySelectorAll('[data-pgdel]').forEach(b => b.onclick = () => { saveDraft(); d.pg = pgOf(d).filter((x, i) => i !== Number(b.dataset.pgdel)); store.set('draft', d); renderToday(); });
+  document.querySelectorAll('.pgto').forEach(el => el.addEventListener('change', () => { el.classList.remove('miss'); saveDraft(); }));
+  const gk = $('#gotK'); if (gk) gk.onclick = () => { S.seenK = [...new Set([...(S.seenK || []), ...S.kudos.map(k => k.id)])]; store.set('seenK', S.seenK); renderToday(); };
   document.querySelectorAll('[data-stgo]').forEach(b => b.onclick = () => {
     saveDraft(); const x = S.stash[Number(b.dataset.stgo)]; if (!x) return;
     S.stash = S.stash.filter(y => y !== x); if (draftHas(S.draft)) stashDraft(S.draft);
@@ -579,6 +591,8 @@ async function submit(priv) {
   (M ? FM : F).forEach(([n]) => { if (!d[n]) miss.push(`.row[data-row=${n}]`); });
   if (!priv && M) MQ.forEach(([k]) => { if (!d[k].trim()) miss.push('#' + k); });
   if (!priv && !d.next.trim()) miss.push('#next');
+  const pg = goodOK() ? pgOf(d) : [];
+  pg.forEach((x, i) => { const t = String(x.text || '').trim(); if (t && !x.to) miss.push(`.pgrow[data-i="${i}"] .pgto`); if (x.to && !t) miss.push(`.pgrow[data-i="${i}"] .pgtx`); });
   if (priv && M && (d.tocoach || '').trim() && !miss.length && !confirm('「顧問に伝えたいこと」は、自分だけに残すと顧問に届きません。このまま自分だけに残しますか？')) return;
   if (d.date > today()) { toast('先の日付には書けません'); return; }
   if (miss.length) {
@@ -591,6 +605,8 @@ async function submit(priv) {
     next: d.next.trim(), at: new Date().toISOString(), priv };
   if (M) Object.assign(e, { opp: d.opp.trim(), n4: d.n4, r4: d.n4 <= 2 ? d.r4.trim() : '', mgood: d.mgood.trim(), mbad: d.mbad.trim(), tgood: d.tgood.trim(), tbad: d.tbad.trim(), mprac: d.mprac.trim(), tocoach: d.tocoach.trim() });
   else Object.assign(e, { good: d.good.trim(), bad: d.bad.trim(), heard: d.heard.trim() });
+  const kd = pg.filter(x => x.to && String(x.text || '').trim()).map(x => ({ to: x.to, text: String(x.text).trim() }));
+  if (kd.length) e.kudos = kd;
   S.outbox.push(e); S.draft = null; store.del('draft'); save();
   $('#submit').disabled = true;
   await flush();
@@ -608,6 +624,75 @@ const isLow = e => fieldsOf(e).some(([n]) => e[n] && e[n] <= 2);
 /* 「自分だけに残す」は、受け口（GAS）が対応しているときだけ出す（古いGASだと中身が顧問に見えてしまうため） */
 const privOK = () => (S.feat || []).includes('priv');
 const privTag = '<span class="tag me">自分だけ</span>';
+
+/* ===== 仲間のGOOD：部員が仲間のよかったことを書く → 顧問が読んで本人に届ける（書いた人の名前つき） ===== */
+const goodOK = () => (S.feat || []).includes('good');
+const pgOf = d => (Array.isArray(d.pg) && d.pg.length ? d.pg : [{ to: '', text: '' }]);
+function goodForm(d) {
+  if (!goodOK() || !(S.mates || []).length) return '';
+  const rows = pgOf(d);
+  return `<div class="h"><span class="en">TEAM GOOD</span><span class="ja">仲間のよかったこと</span></div>
+  <div class="hint">書かなくてもOK。<b>だれが・何をしていたか</b>を具体的に（例：乱れたボールに一番に声を出して入っていた）。顧問が読んでから、あなたの名前つきで本人に届きます（「自分だけに残す」にしても、ここは顧問に届きます）</div>
+  ${rows.map((x, i) => `<div class="pgrow" data-i="${i}"><select class="pgto"><option value="">だれのこと？</option>${S.mates.map(m => `<option value="${m.id}" ${x.to === m.id ? 'selected' : ''}>${esc(m.name)}${m.grade ? `（${m.grade}年）` : ''}</option>`).join('')}</select>
+    <textarea class="pgtx" placeholder="何をしていたか">${esc(x.text || '')}</textarea>${rows.length > 1 ? `<button class="link" data-pgdel="${i}">この欄を消す</button>` : ''}</div>`).join('')}
+  ${rows.length < 3 ? '<button class="link" id="pgadd">＋ もう1人書く</button>' : ''}`;
+}
+/* 部員：届いたGOOD（まだ見ていないもの）を今日の記録の上に出す */
+function goodInbox() {
+  const fresh = (S.kudos || []).filter(k => !(S.seenK || []).includes(k.id)).sort((a, b) => Date.parse(b.decided || b.at) - Date.parse(a.decided || a.at));
+  if (!fresh.length) return '';
+  return `<div class="card good"><div class="date"><span>仲間からGOODが届きました</span><span class="tag">${fresh.length}件</span></div>
+    ${fresh.map(k => `<div class="kline"><b>${esc(k.fromName || '仲間')}</b>から　<span class="mini">${jdate(k.date)}</span><div class="gtext">${esc(k.text)}</div></div>`).join('')}
+    <div class="rbtns" style="margin-top:8px"><span class="mini" style="flex:1">もらったGOODは「これまで」のいちばん上にも残ります</span><button class="mini-btn save" id="gotK">受け取った</button></div></div>`;
+}
+/* 部員：もらったGOODの一覧（これまでのタブの上） */
+function goodGot() {
+  const ks = (S.kudos || []).slice().sort((a, b) => Date.parse(b.decided || b.at) - Date.parse(a.decided || a.at));
+  if (!goodOK() || !ks.length) return '';
+  return `<details class="card good"><summary><b>もらったGOOD</b>　${ks.length}件</summary>${ks.map(k => `<div class="kline"><b>${esc(k.fromName || '仲間')}</b>から　<span class="mini">${jdate(k.date)}</span><div class="gtext">${esc(k.text)}</div></div>`).join('')}</details>`;
+}
+const KST = { '': '顧問が読んでいます', ok: '本人に届きました', no: '顧問があずかりました' };
+/* 記録のカードに、その記録で書いた仲間のGOODを出す（部員＝届いたかどうか／顧問＝状態） */
+function goodLines(e, o) {
+  if (o.coach) {
+    const ks = (S.cd.kudos || []).filter(k => k.entryId === e.id); if (!ks.length) return '';
+    return ks.map(k => `<div class="kline">GOOD → <b>${esc(memberName(k.to))}</b>　<span class="mini">${k.status === 'ok' ? '届けました' : k.status === 'no' ? '届けていません' : '確認待ち（ホームで）'}</span><div class="gtext">${esc(k.text)}</div></div>`).join('');
+  }
+  const sent = (S.kudosSent || []).filter(k => k.entryId === e.id);
+  const ks = sent.length ? sent : (e.kudos || []).map(k => ({ toName: ((S.mates || []).find(m => m.id === k.to) || {}).name || '', text: k.text, status: '' }));
+  return ks.map(k => `<div class="kline">GOOD → <b>${esc(k.toName)}</b>　<span class="mini">${e._wait ? '送信待ち' : KST[k.status] || ''}</span><div class="gtext">${esc(k.text)}</div></div>`).join('');
+}
+/* 顧問：確認待ちのGOOD（ホーム） */
+function goodCheck() {
+  const ks = (S.cd.kudos || []).filter(k => !k.status).sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  if (!ks.length) return '';
+  return `<div class="h"><span class="en">TEAM GOOD</span><span class="ja">仲間のGOOD　確認待ち ${ks.length}件</span></div>
+    <div class="hint">読んで「本人に届ける」を押すと、書いた人の名前つきで本人のアプリに届きます。「届けない」は本人には届かず、書いた人には「顧問があずかりました」と出ます</div>
+    ${ks.map(k => `<div class="card good"><div class="date"><span>${esc(memberName(k.from))} → ${esc(memberName(k.to))}</span><span class="mini">${jdate(k.date)}</span></div><div class="gtext">${esc(k.text)}</div>
+      <div class="rbtns" style="margin-top:8px"><button class="mini-btn save kdec" data-kid="${k.id}" data-st="ok">本人に届ける</button><button class="mini-btn cancel kdec" data-kid="${k.id}" data-st="no">届けない</button></div></div>`).join('')}
+    ${ks.length > 1 ? `<button class="btn ghost" id="kall" style="padding:10px;margin-bottom:6px">${ks.length}件まとめて本人に届ける</button>` : ''}`;
+}
+async function kudosDecide(ids, status) {
+  try {
+    const j = await api('kudosDecide', { key: S.key, ids, status });
+    S.cd.kudos = (S.cd.kudos || []).map(k => ids.includes(k.id) ? Object.assign({}, k, { status: j.status, by: j.by, decided: j.decided }) : k); store.set('cd', S.cd);
+    toast(status === 'ok' ? '本人に届けました' : '届けないことにしました'); render();
+  } catch (e) { toast(e.server ? e.message : 'ネットにつながっていません'); render(); }
+}
+function bindGoodCheck() {
+  document.querySelectorAll('.kdec').forEach(b => b.onclick = () => { document.querySelectorAll('.kdec').forEach(x => x.disabled = true); kudosDecide([b.dataset.kid], b.dataset.st); });
+  const ka = $('#kall'); if (ka) ka.onclick = () => { if (!confirm('確認待ちのGOODを全部、本人に届けます。よいですか？')) return; ka.disabled = true; kudosDecide((S.cd.kudos || []).filter(k => !k.status).map(k => k.id), 'ok'); };
+}
+function memberGood(uid) {
+  const got = (S.cd.kudos || []).filter(k => k.to === uid).sort((a, b) => b.date.localeCompare(a.date)), wrote = (S.cd.kudos || []).filter(k => k.from === uid).sort((a, b) => b.date.localeCompare(a.date));
+  if (!got.length && !wrote.length) return '';
+  const st = k => k.status === 'ok' ? '' : k.status === 'no' ? '（届けていない）' : '（確認待ち）';
+  return `<details class="card good"><summary><b>仲間のGOOD</b>　もらった ${got.length}・書いた ${wrote.length}</summary>
+    ${got.map(k => `<div class="kline">← <b>${esc(memberName(k.from))}</b>から　<span class="mini">${jdate(k.date)}${st(k)}</span><div class="gtext">${esc(k.text)}</div></div>`).join('')}
+    ${wrote.map(k => `<div class="kline">→ <b>${esc(memberName(k.to))}</b>へ　<span class="mini">${jdate(k.date)}${st(k)}</span><div class="gtext">${esc(k.text)}</div></div>`).join('')}</details>`;
+}
+/* 顧問：部員ごとのGOODの数（もらった＝届けたもの／書いた＝全部） */
+const goodCount = uid => ({ got: (S.cd.kudos || []).filter(k => k.to === uid && k.status === 'ok').length, wrote: (S.cd.kudos || []).filter(k => k.from === uid).length });
 /* 顧問（と顧問が部員の画面で見るとき）に出す、自分だけの記録：日付と数字だけ */
 function privHTML(e, o) {
   const M = e.type === 'match';
@@ -637,6 +722,7 @@ function entryHTML(e, o) {
     ${o.coach ? reasons + toc : ''}
     <div class="more">${o.coach ? '' : reasons}${detail}${o.coach ? '' : toc}</div>
     <div class="kv"><span class="k">NEXT　次にどうする</span>${esc(e.next)}</div>`}
+    ${goodLines(e, o)}
     ${rs.map(r => replyHTML(r, o.coach)).join('') || (e._wait || o.coach || e.priv ? '' : '<div class="mini" style="margin-top:6px">（返事はまだ）</div>')}
     ${e.priv && !o.coach ? `<div class="rbtns" style="margin-top:8px"><span class="mini" style="flex:1">顧問の画面には${e.type === 'self' ? '日付と時間' : '日付と数字'}だけ出ています</span><button class="mini-btn save shareb" data-share="${e.id}">顧問に見せる</button></div>` : ''}
     ${o.coach ? `<div class="q">${rs.length ? 'もう一言' : `COACH　${esc(S.name)}から`}</div><textarea class="rep" id="rep_${e.id}" placeholder="一言">${esc(S.repDraft[e.id] || '')}</textarea><button class="btn send" data-id="${e.id}" style="margin-top:8px;padding:11px">返事を送る</button>` : ''}
@@ -692,7 +778,7 @@ function renderHistory() {
   S.justSeen = unseen().map(rkey);
   shell(S.name, `<div class="hctl"><div class="seg"><button data-hm="all" class="${S.hmode === 'all' ? 'on' : ''}">全部</button><button data-hm="note" class="${S.hmode === 'note' ? 'on' : ''}">気づき</button></div>
     <div class="srow"><input id="hq" type="search" placeholder="言葉でさがす（例：サーブ）" value="${esc(S.hq)}"><button class="stoggle ${S.starOnly ? 'on' : ''}" id="sonly">★だけ</button></div></div>
-    <div class="list" id="hlist">${historyList()}</div><div class="foot"><button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);
+    ${goodGot()}<div class="list" id="hlist">${historyList()}</div><div class="foot"><button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);
   bindHistoryList(); bindFoot();
   document.querySelectorAll('[data-hm]').forEach(b => b.onclick = () => { S.hmode = b.dataset.hm; store.set('hmode', S.hmode); renderHistory(); });
   $('#sonly').onclick = () => { S.starOnly = !S.starOnly; $('#sonly').classList.toggle('on', S.starOnly); refreshList(); };
@@ -796,6 +882,7 @@ function renderCoach() {
     ${schedSoon() || '<button class="card soon" id="toSched"><div class="mini">今日と明日の予定はありません（押すと予定のタブを開きます）</div></button>'}
     ${todayBlock(today(), 'TODAY', '今日の記録')}
     ${todayBlock(addDays(today(), -1), 'YESTERDAY', '昨日の記録')}
+    ${goodCheck()}
     <div class="h"><span class="en">NOTES</span><span class="ja">${S.showAll ? '記録' : '返事を待っている記録'}</span></div>
     <div class="mini" style="margin:2px 0 10px">体の調子・気持ち・出来などに1か2がある記録は、左に黄色の線が付きます</div>
     <div class="list">${body}</div>
@@ -803,7 +890,7 @@ function renderCoach() {
   $('#all').onclick = () => { S.showAll = !S.showAll; render(); };
   const tsc = $('#toSched'); if (tsc) tsc.onclick = () => go('csched');
   document.querySelectorAll('.tname').forEach(b => b.onclick = () => { S.tab = 'members'; S.member = b.dataset.uid; pushNav(); render(); window.scrollTo(0, 0); });
-  bindCards(); bindReplies(); bindFoot();
+  bindCards(); bindReplies(); bindGoodCheck(); bindFoot();
 }
 /* 顧問のホーム：その日（記録の日付）に記録した部員の数と名前。「自分だけ」の記録も数える。今日と昨日の2つを出す */
 function todayBlock(t = today(), en = 'TODAY', ja = '今日の記録') {
@@ -823,10 +910,13 @@ function renderMembers() {
     const wait = es.filter(e => !e.priv && !S.cd.replies.some(r => r.entryId === e.id)).length;
     return `<div class="card member" data-uid="${m.id}"><div class="date"><span>${esc(m.name)}</span>${wait ? `<span class="tag">未返事 ${wait}</span>` : ''}</div>
       <div class="mini">記録 ${es.length}件　${last ? `最後の記録 ${jdate(last.date)}` : 'まだ記録なし'}${cnotesOf(m.id).length ? `　顧問メモ ${cnotesOf(m.id).length}件` : ''}</div>
+      ${(S.cd.kudos || []).length ? `<div class="mini">仲間のGOOD　もらった ${goodCount(m.id).got}・書いた ${goodCount(m.id).wrote}</div>` : ''}
       <div class="mini">最後に開いた ${m.last ? whenText(m.last) : '—'}${m.first ? '　<b>まだ自分の合言葉を決めていません</b>' : ''}</div>
       ${last ? `<div class="nums">意識できた <b>${last.n1}</b>　体の調子 <b>${last.n2}</b>　気持ち <b>${last.n3}</b>${last.type === 'match' ? `　出来 <b>${last.n4}</b>` : ''}</div>` : ''}</div>`;
   }).join('');
-  shell('顧問用　' + S.name, `<div class="list">${rows || '<p class="mini center">部員がまだいません</p>'}</div><div class="foot"><button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);
+  const since = addDays(today(), -13);
+  const none = (S.cd.kudos || []).length ? S.cd.members.filter(m => !(S.cd.kudos || []).some(k => k.to === m.id && k.date >= since)) : [];
+  shell('顧問用　' + S.name, `${none.length ? `<div class="card good"><b>ここ2週間、仲間のGOODに名前が出ていない部員</b><div style="margin-top:4px">${none.map(m => esc(m.name)).join('、')}</div><div class="mini" style="margin-top:4px">部員には見えません。顧問から声をかけるきっかけに</div></div>` : ''}<div class="list">${rows || '<p class="mini center">部員がまだいません</p>'}</div><div class="foot"><button class="link" id="reload">最新にする</button>　<button class="link" id="logout">この端末から合言葉を消す</button></div>`);
   document.querySelectorAll('.member').forEach(c => c.onclick = () => { S.member = c.dataset.uid; pushNav(); render(); window.scrollTo(0, 0); });
   bindFoot();
 }
@@ -835,6 +925,7 @@ function renderMember() {
   shell('顧問用　' + memberName(S.member) + 'の記録', `<button class="link" id="back" style="margin-bottom:10px">← 部員ごとにもどる</button>
     <button class="btn ghost" id="viewas" style="margin:0 0 12px;padding:10px">この部員の画面で見る</button>
     ${memoBlock(S.member)}
+    ${memberGood(S.member)}
     <div class="h"><span class="en">NOTES</span><span class="ja">記録</span></div>
     <div class="list">${es.map(e => entryHTML(e, { coach: true, replies: cRepliesFor(e.id), tag: cRepliesFor(e.id).length ? '' : '<span class="tag">未返事</span>' })).join('') || '<p class="mini center">まだ記録がありません</p>'}</div>`);
   $('#back').onclick = () => history.back();
@@ -1152,7 +1243,7 @@ function renderCoachJump() {
 }
 
 /* ===== 顧問：部員の画面で見る（見るだけ。データは顧問の一覧から作る） ===== */
-const VIEW_KEYS = ['stash', 'sched', 'readN', 'entries', 'replies', 'notices', 'reports', 'jumps', 'name', 'me', 'role', 'tab', 'seen', 'seenN', 'seenRep', 'draft', 'outbox', 'member', 'cview', 'hq', 'starOnly', 'hmode'];
+const VIEW_KEYS = ['mates', 'kudos', 'kudosSent', 'seenK', 'stash', 'sched', 'readN', 'entries', 'replies', 'notices', 'reports', 'jumps', 'name', 'me', 'role', 'tab', 'seen', 'seenN', 'seenRep', 'draft', 'outbox', 'member', 'cview', 'hq', 'starOnly', 'hmode'];
 function enterView(uid) {
   const m = (S.cd.members || []).find(x => x.id === uid); if (!m) return;
   S.viewBak = {}; VIEW_KEYS.forEach(k => S.viewBak[k] = S[k]);
@@ -1164,6 +1255,9 @@ function enterView(uid) {
   S.reports = (S.cd.reports || []).filter(r => r.uid === uid || r.uid === 'team'); S.jumps = S.cd.jumps || []; S.sched = S.cd.schedule || [];
   S.name = m.name; S.me = uid; S.role = 'student'; S.tab = 'today'; S.member = null; S.cview = null; S.hq = ''; S.starOnly = false; S.hmode = 'all';
   S.seen = S.replies.map(rkey); S.seenN = S.notices.map(nkey); S.readN = (S.cd.reads || []).filter(r => r.uid === uid).map(r => ({ noticeId: r.noticeId, at: r.at || '' })); S.seenRep = S.reports.map(rkeyRep); S.draft = null; S.outbox = [];
+  const ks = S.cd.kudos || [];
+  S.mates = (S.cd.members || []).filter(x => x.id !== uid); S.kudos = ks.filter(k => k.to === uid && k.status === 'ok').map(k => Object.assign({}, k, { fromName: memberName(k.from) }));
+  S.kudosSent = ks.filter(k => k.from === uid).map(k => Object.assign({}, k, { toName: memberName(k.to) })); S.seenK = [];
 }
 function exitView() {
   if (!S.viewAs) return; const b = S.viewBak || {}; S.viewAs = null; VIEW_KEYS.forEach(k => { if (k in b) S[k] = b[k]; }); S.viewBak = null; S.tab = 'members';
