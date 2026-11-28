@@ -474,7 +474,7 @@ function saveDraft() {
   if (S.tab !== 'today' || !$('#edate')) return;
   const d = S.draft || blankDraft();
   TEXT_KEYS.forEach(k => { const el = $('#' + k); if (el) d[k] = el.value; });
-  const rows = document.querySelectorAll('.pgrow'); if (rows.length) d.pg = [...rows].map(r => ({ to: r.querySelector('.pgto').value, text: r.querySelector('.pgtx').value, about: (r.querySelector('.pgab') || {}).value || '' }));
+  const rows = document.querySelectorAll('.pgrow'); if (rows.length) d.pg = [...rows].map(r => ({ to: r.querySelector('.pgto').value, text: r.querySelector('.pgtx').value }));
   S.draft = d; store.set('draft', d);
 }
 function renderToday() {
@@ -549,7 +549,7 @@ function renderToday() {
   const ts = $('#toSched'); if (ts) ts.onclick = () => go('sched');
   const pa = $('#pgadd'); if (pa) pa.onclick = () => { saveDraft(); d.pg = [...pgOf(d), { to: '', text: '' }].slice(0, 3); store.set('draft', d); renderToday(); };
   document.querySelectorAll('[data-pgdel]').forEach(b => b.onclick = () => { saveDraft(); d.pg = pgOf(d).filter((x, i) => i !== Number(b.dataset.pgdel)); store.set('draft', d); renderToday(); });
-  document.querySelectorAll('.pgto').forEach(el => el.addEventListener('change', () => { el.classList.remove('miss'); saveDraft(); renderToday(); }));
+  document.querySelectorAll('.pgto').forEach(el => el.addEventListener('change', () => { el.classList.remove('miss'); saveDraft(); }));
   const gk = $('#gotK'); if (gk) gk.onclick = () => { S.seenK = [...new Set([...(S.seenK || []), ...S.kudos.map(k => k.id)])]; store.set('seenK', S.seenK); renderToday(); };
   document.querySelectorAll('[data-stgo]').forEach(b => b.onclick = () => {
     saveDraft(); const x = S.stash[Number(b.dataset.stgo)]; if (!x) return;
@@ -605,7 +605,7 @@ async function submit(priv) {
     next: d.next.trim(), at: new Date().toISOString(), priv };
   if (M) Object.assign(e, { opp: d.opp.trim(), n4: d.n4, r4: d.n4 <= 2 ? d.r4.trim() : '', mgood: d.mgood.trim(), mbad: d.mbad.trim(), tgood: d.tgood.trim(), tbad: d.tbad.trim(), mprac: d.mprac.trim(), tocoach: d.tocoach.trim() });
   else Object.assign(e, { good: d.good.trim(), bad: d.bad.trim(), heard: d.heard.trim() });
-  const kd = pg.filter(x => x.to && String(x.text || '').trim()).map(x => ({ to: x.to, text: String(x.text).trim(), about: x.to === 'other' ? String(x.about || '').trim() : '' }));
+  const kd = pg.filter(x => x.to && String(x.text || '').trim()).map(x => ({ to: x.to, text: String(x.text).trim() }));
   if (kd.length) e.kudos = kd;
   S.outbox.push(e); S.draft = null; store.del('draft'); save();
   $('#submit').disabled = true;
@@ -632,10 +632,9 @@ function goodForm(d) {
   if (!goodOK() || !(S.mates || []).length) return '';
   const rows = pgOf(d);
   return `<div class="h"><span class="en">TEAM GOOD</span><span class="ja">仲間のよかったこと</span></div>
-  <div class="hint">書かなくてもOK。<b>だれが・何をしていたか</b>を具体的に（例：乱れたボールに一番に声を出して入っていた）。顧問が読んでから、あなたの名前つきで本人に届きます。<b>「その他」</b>は、先輩・マネージャー・チーム全体のことや、何でも自由に（顧問だけが読みます）。「自分だけに残す」にしても、ここは顧問に届きます</div>
-  ${rows.map((x, i) => `<div class="pgrow" data-i="${i}"><select class="pgto"><option value="">だれのこと？</option>${S.mates.map(m => `<option value="${m.id}" ${x.to === m.id ? 'selected' : ''}>${esc(m.name)}${m.grade ? `（${m.grade}年）` : ''}</option>`).join('')}<option value="other" ${x.to === 'other' ? 'selected' : ''}>その他（だれでも・何でも）</option></select>
-    ${x.to === 'other' ? `<input class="pgab" placeholder="だれ・何について（例：チーム全体、先輩、マネージャー）書かなくてもOK" value="${esc(x.about || '')}" style="margin-bottom:6px">` : ''}
-    <textarea class="pgtx" placeholder="${x.to === 'other' ? '何でも自由に' : '何をしていたか'}">${esc(x.text || '')}</textarea>${rows.length > 1 ? `<button class="link" data-pgdel="${i}">この欄を消す</button>` : ''}</div>`).join('')}
+  <div class="hint">書かなくてもOK。<b>だれが・何をしていたか</b>を具体的に（例：乱れたボールに一番に声を出して入っていた）。顧問が読んでから、あなたの名前つきで本人に届きます（「自分だけに残す」にしても、ここは顧問に届きます）</div>
+  ${rows.map((x, i) => `<div class="pgrow" data-i="${i}"><select class="pgto"><option value="">だれのこと？</option>${S.mates.map(m => `<option value="${m.id}" ${x.to === m.id ? 'selected' : ''}>${esc(m.name)}${m.grade ? `（${m.grade}年）` : ''}</option>`).join('')}</select>
+    <textarea class="pgtx" placeholder="何をしていたか">${esc(x.text || '')}</textarea>${rows.length > 1 ? `<button class="link" data-pgdel="${i}">この欄を消す</button>` : ''}</div>`).join('')}
   ${rows.length < 3 ? '<button class="link" id="pgadd">＋ もう1人書く</button>' : ''}`;
 }
 /* 部員：届いたGOOD（まだ見ていないもの）を今日の記録の上に出す */
@@ -653,33 +652,31 @@ function goodGot() {
   return `<details class="card good"><summary><b>もらったGOOD</b>　${ks.length}件</summary>${ks.map(k => `<div class="kline"><b>${esc(k.fromName || '仲間')}</b>から　<span class="mini">${jdate(k.date)}</span><div class="gtext">${esc(k.text)}</div></div>`).join('')}</details>`;
 }
 const KST = { '': '顧問が読んでいます', ok: '本人に届きました', no: '顧問があずかりました' };
-const kTo = k => k.to === 'other' ? 'その他' + (k.about ? `（${k.about}）` : '') : memberName(k.to);
-const kStatus = k => k.to === 'other' ? (k.status ? '顧問が読みました' : '顧問が読んでいます') : KST[k.status] || '';
 /* 記録のカードに、その記録で書いた仲間のGOODを出す（部員＝届いたかどうか／顧問＝状態） */
 function goodLines(e, o) {
   if (o.coach) {
     const ks = (S.cd.kudos || []).filter(k => k.entryId === e.id); if (!ks.length) return '';
-    return ks.map(k => `<div class="kline">GOOD → <b>${esc(kTo(k))}</b>　<span class="mini">${k.to === 'other' ? (k.status ? '読みました' : '確認待ち（ホームで）') : k.status === 'ok' ? '届けました' : k.status === 'no' ? '届けていません' : '確認待ち（ホームで）'}</span><div class="gtext">${esc(k.text)}</div></div>`).join('');
+    return ks.map(k => `<div class="kline">GOOD → <b>${esc(memberName(k.to))}</b>　<span class="mini">${k.status === 'ok' ? '届けました' : k.status === 'no' ? '届けていません' : '確認待ち（ホームで）'}</span><div class="gtext">${esc(k.text)}</div></div>`).join('');
   }
   const sent = (S.kudosSent || []).filter(k => k.entryId === e.id);
-  const ks = sent.length ? sent : (e.kudos || []).map(k => ({ to: k.to, about: k.about, toName: ((S.mates || []).find(m => m.id === k.to) || {}).name || '', text: k.text, status: '' }));
-  return ks.map(k => `<div class="kline">GOOD → <b>${esc(k.to === 'other' ? 'その他' + (k.about ? `（${k.about}）` : '') : k.toName)}</b>　<span class="mini">${e._wait ? '送信待ち' : kStatus(k)}</span><div class="gtext">${esc(k.text)}</div></div>`).join('');
+  const ks = sent.length ? sent : (e.kudos || []).map(k => ({ toName: ((S.mates || []).find(m => m.id === k.to) || {}).name || '', text: k.text, status: '' }));
+  return ks.map(k => `<div class="kline">GOOD → <b>${esc(k.toName)}</b>　<span class="mini">${e._wait ? '送信待ち' : KST[k.status] || ''}</span><div class="gtext">${esc(k.text)}</div></div>`).join('');
 }
 /* 顧問：確認待ちのGOOD（ホーム） */
 function goodCheck() {
   const ks = (S.cd.kudos || []).filter(k => !k.status).sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
   if (!ks.length) return '';
   return `<div class="h"><span class="en">TEAM GOOD</span><span class="ja">仲間のGOOD　確認待ち ${ks.length}件</span></div>
-    <div class="hint">読んで「本人に届ける」を押すと、書いた人の名前つきで本人のアプリに届きます。「届けない」は本人には届かず、書いた人には「顧問があずかりました」と出ます。「その他」はだれにも届かないので「読んだ」だけです</div>
-    ${ks.map(k => `<div class="card good"><div class="date"><span>${esc(memberName(k.from))} → ${esc(kTo(k))}</span><span class="mini">${jdate(k.date)}</span></div><div class="gtext">${esc(k.text)}</div>
-      <div class="rbtns" style="margin-top:8px">${k.to === 'other' ? `<span class="mini" style="flex:1">その他（顧問だけが読みます）</span><button class="mini-btn save kdec" data-kid="${k.id}" data-st="ok">読んだ</button>` : `<button class="mini-btn save kdec" data-kid="${k.id}" data-st="ok">本人に届ける</button><button class="mini-btn cancel kdec" data-kid="${k.id}" data-st="no">届けない</button>`}</div></div>`).join('')}
-    ${ks.length > 1 ? `<button class="btn ghost" id="kall" style="padding:10px;margin-bottom:6px">${ks.length}件まとめて${ks.some(k => k.to === 'other') ? '届ける・読んだにする' : '本人に届ける'}</button>` : ''}`;
+    <div class="hint">読んで「本人に届ける」を押すと、書いた人の名前つきで本人のアプリに届きます。「届けない」は本人には届かず、書いた人には「顧問があずかりました」と出ます</div>
+    ${ks.map(k => `<div class="card good"><div class="date"><span>${esc(memberName(k.from))} → ${esc(memberName(k.to))}</span><span class="mini">${jdate(k.date)}</span></div><div class="gtext">${esc(k.text)}</div>
+      <div class="rbtns" style="margin-top:8px"><button class="mini-btn save kdec" data-kid="${k.id}" data-st="ok">本人に届ける</button><button class="mini-btn cancel kdec" data-kid="${k.id}" data-st="no">届けない</button></div></div>`).join('')}
+    ${ks.length > 1 ? `<button class="btn ghost" id="kall" style="padding:10px;margin-bottom:6px">${ks.length}件まとめて本人に届ける</button>` : ''}`;
 }
 async function kudosDecide(ids, status) {
   try {
     const j = await api('kudosDecide', { key: S.key, ids, status });
     S.cd.kudos = (S.cd.kudos || []).map(k => ids.includes(k.id) ? Object.assign({}, k, { status: j.status, by: j.by, decided: j.decided }) : k); store.set('cd', S.cd);
-    toast(status === 'ok' ? (ids.every(id => ((S.cd.kudos || []).find(k => k.id === id) || {}).to === 'other') ? '読んだにしました' : '本人に届けました') : '届けないことにしました'); render();
+    toast(status === 'ok' ? '本人に届けました' : '届けないことにしました'); render();
   } catch (e) { toast(e.server ? e.message : 'ネットにつながっていません'); render(); }
 }
 function bindGoodCheck() {
@@ -692,7 +689,7 @@ function memberGood(uid) {
   const st = k => k.status === 'ok' ? '' : k.status === 'no' ? '（届けていない）' : '（確認待ち）';
   return `<details class="card good"><summary><b>仲間のGOOD</b>　もらった ${got.length}・書いた ${wrote.length}</summary>
     ${got.map(k => `<div class="kline">← <b>${esc(memberName(k.from))}</b>から　<span class="mini">${jdate(k.date)}${st(k)}</span><div class="gtext">${esc(k.text)}</div></div>`).join('')}
-    ${wrote.map(k => `<div class="kline">→ <b>${esc(kTo(k))}</b>へ　<span class="mini">${jdate(k.date)}${st(k)}</span><div class="gtext">${esc(k.text)}</div></div>`).join('')}</details>`;
+    ${wrote.map(k => `<div class="kline">→ <b>${esc(memberName(k.to))}</b>へ　<span class="mini">${jdate(k.date)}${st(k)}</span><div class="gtext">${esc(k.text)}</div></div>`).join('')}</details>`;
 }
 /* 顧問：部員ごとのGOODの数（もらった＝届けたもの／書いた＝全部） */
 const goodCount = uid => ({ got: (S.cd.kudos || []).filter(k => k.to === uid && k.status === 'ok').length, wrote: (S.cd.kudos || []).filter(k => k.from === uid).length });
