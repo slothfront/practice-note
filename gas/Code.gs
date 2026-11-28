@@ -24,8 +24,9 @@ const COLS = {
   jumps: ['id', 'uid', 'date', 'stand', 'run', 'reach', 'at', 'by'],
   cnotes: ['id', 'uid', 'text', 'at', 'by', 'byId', 'edited'],
   creads: ['noteId', 'uid', 'at'],
-  /* 仲間のGOOD：部員が仲間のよかったことを書く。顧問が確かめてから本人に届く（status：空＝確認待ち／ok＝届けた／no＝届けない） */
-  kudos: ['id', 'entryId', 'from', 'to', 'date', 'text', 'at', 'status', 'by', 'decided']
+  /* 仲間のGOOD：部員が仲間のよかったことを書く。顧問が確かめてから本人に届く（status：空＝確認待ち／ok＝届けた／no＝届けない）。
+     to＝other は「その他」（仲間以外・チーム・何でも）。だれにも届かず顧問だけが読む（ok＝読んだ）。about＝だれ・何について */
+  kudos: ['id', 'entryId', 'from', 'to', 'date', 'text', 'at', 'status', 'by', 'decided', 'about']
 };
 const SHEET = { members: '部員', entries: '記録', replies: '返事', notices: 'お知らせ', reads: '既読', reports: 'レポート', jumps: 'ジャンプ', cnotes: '顧問メモ', creads: '顧問既読', kudos: '仲間のGOOD' };
 const CHUNK = 40000;  // 1マスに入れる文字数（表の1マスは5万文字まで）
@@ -115,8 +116,8 @@ function handle_(b) {
     const readN = readAll_(book.getSheetByName(SHEET.reads)).filter(r => String(r.uid) === user.id).map(r => ({ noticeId: String(r.noticeId), at: String(r.at || '') }));
     const kd = readAll_(book.getSheetByName(SHEET.kudos)).map(cleanK_);
     const names = nameMap_(book);
-    const kudos = kd.filter(k => k.to === user.id && k.status === 'ok').map(k => Object.assign({}, k, { fromName: names[k.from] || '' }));
-    const kudosSent = kd.filter(k => k.from === user.id).map(k => ({ id: k.id, entryId: k.entryId, to: k.to, toName: names[k.to] || '', text: k.text, date: k.date, status: k.status }));
+    const kudos = kd.filter(k => k.to === user.id && k.to !== 'other' && k.status === 'ok').map(k => Object.assign({}, k, { fromName: names[k.from] || '' }));
+    const kudosSent = kd.filter(k => k.from === user.id).map(k => ({ id: k.id, entryId: k.entryId, to: k.to, toName: k.to === 'other' ? k.about : names[k.to] || '', about: k.about, text: k.text, date: k.date, status: k.status }));
     return { ok: true, name: user.name, entries, replies, notices, readN, reports, jumps: jumpsOf_(book), feat: ['priv', 'good'], schedule: schedule_(), mates: mates_(book, user), kudos, kudosSent };
   }
   if (a === 'coachList' && coach) {
@@ -127,7 +128,7 @@ function handle_(b) {
     const replies = readAll_(book.getSheetByName(SHEET.replies)).map(cleanR_);
     const notices = readAll_(book.getSheetByName(SHEET.notices)).map(cleanN_);
     const reads = readAll_(book.getSheetByName(SHEET.reads)).map(r => ({ noticeId: String(r.noticeId), uid: String(r.uid), at: String(r.at || '') }));
-    const kudos = readAll_(book.getSheetByName(SHEET.kudos)).map(cleanK_).filter(k => !gone.has(k.from) && !gone.has(k.to));
+    const kudos = readAll_(book.getSheetByName(SHEET.kudos)).map(cleanK_).filter(k => !gone.has(k.from) && !gone.has(k.to));  // その他（to=other）も入る
     return { ok: true, feat: ['priv', 'good'], kudos, schedule: schedule_(), name: user.name, me: user.id, members, entries, replies, notices, reads, reports: reportsOf_(book).filter(r => !gone.has(r.uid)), jumps: jumpsOf_(book),
       coaches: readAll_(book.getSheetByName(SHEET.members)).filter(r => r['役割'] === 'coach' && r['名前']).map(r => ({ id: String(r.id), name: String(r['名前']) })),
       cnotes: readAll_(book.getSheetByName(SHEET.cnotes)).map(cleanC_), creads: readAll_(book.getSheetByName(SHEET.creads)).map(r => ({ noteId: String(r.noteId), uid: String(r.uid) })) };
@@ -458,7 +459,7 @@ const PRIV_TEXT = ['focus', 'opp', 'r1', 'r2', 'r3', 'r4', 'good', 'bad', 'heard
 function hidePriv_(e) { if (!e.priv) return e; const o = Object.assign({}, e); PRIV_TEXT.forEach(k => o[k] = ''); o.star = false; return o; }
 function cleanR_(r) { return { id: String(r.id), entryId: String(r.entryId), text: String(r.text).replace(/^'/, ''), at: String(r.at), by: String(r.by || '佐藤'), byId: String(r.byId || ''), edited: String(r.edited || '') }; }
 function cleanC_(n) { return { id: String(n.id), uid: String(n.uid), text: String(n.text).replace(/^'/, ''), at: String(n.at), by: String(n.by || ''), byId: String(n.byId || ''), edited: String(n.edited || '') }; }
-function cleanK_(k) { return { id: String(k.id), entryId: String(k.entryId), from: String(k.from), to: String(k.to), date: dstr_(k.date), text: String(k.text).replace(/^'/, ''), at: String(k.at), status: String(k.status || ''), by: String(k.by || ''), decided: String(k.decided || '') }; }
+function cleanK_(k) { return { id: String(k.id), entryId: String(k.entryId), from: String(k.from), to: String(k.to), date: dstr_(k.date), text: String(k.text).replace(/^'/, ''), at: String(k.at), status: String(k.status || ''), by: String(k.by || ''), decided: String(k.decided || ''), about: String(k.about || '').replace(/^'/, '') }; }
 /* 部員（引退していない・自分以外）の名前。仲間のGOODで「だれのことか」を選ぶため */
 function mates_(book, user) { return readAll_(book.getSheetByName(SHEET.members)).filter(r => r['役割'] !== 'coach' && !isRetired_(r) && r['名前'] && String(r.id) !== user.id).map(r => ({ id: String(r.id), name: String(r['名前']), grade: gradeOf_(r['学年']) })); }
 function nameMap_(book) { const o = {}; readAll_(book.getSheetByName(SHEET.members)).forEach(r => { o[String(r.id)] = String(r['名前'] || ''); }); return o; }
@@ -471,9 +472,9 @@ function addKudos_(book, user, en) {
   if (have.has(String(en.id))) return;
   const now = new Date().toISOString();
   list.slice(0, 3).forEach((k, i) => {
-    const to = String(k && k.to || ''), text = String(k && k.text || '').trim();
-    if (!ok.has(to) || !text) return;
-    sh.appendRow([String(en.id) + '_' + i, String(en.id), user.id, to, String(en.date), clip_(text.slice(0, 300)), now, '', '', '']);
+    const to = String(k && k.to || ''), text = String(k && k.text || '').trim(), about = String(k && k.about || '').trim();
+    if (!(ok.has(to) || to === 'other') || !text) return;
+    sh.appendRow([String(en.id) + '_' + i, String(en.id), user.id, to, String(en.date), clip_(text.slice(0, 600)), now, '', '', '', to === 'other' ? clip_(about.slice(0, 60)) : '']);
   });
 }
 function cleanN_(n) { return { id: String(n.id), to: String(n.to), targets: String(n.targets || ''), text: String(n.text).replace(/^'/, ''), at: String(n.at), by: String(n.by || '佐藤'), byId: String(n.byId || ''), edited: String(n.edited || '') }; }
